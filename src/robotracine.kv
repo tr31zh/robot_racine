@@ -1,0 +1,234 @@
+#:kivy 1.10.0
+
+<RootWidget>:
+    StartUpPage:
+        id: startup_page
+
+    ManualRoot:
+        id: manual_page
+
+    ManualCapture:
+        id: capture_page
+
+    ManualStream:
+        id: stream_page
+
+    Jobs:
+        id: jobs_page
+
+    JobsView:
+        id: view_page
+
+    JobsEditAdd:
+        id: job_edit_page
+
+    JobsLog:
+        id: log_page
+
+    DataIn:
+        id: data_in_page
+
+    DataInEdit:
+        id: data_in_edit_page
+
+<Footer@BoxLayout>:
+    orientation: "horizontal"
+    padding: 10
+    size_hint: 1, 0.2
+    btn_text: ""
+    back_press: None
+    Label:
+        text: ""
+        size_hint: 1, 1
+    Button:
+        text: root.btn_text
+        on_press: root.back_press()
+        size_hint: 0.25, 1
+
+<PageChanger@Button>:
+    target: ""
+    manager: None
+    on_press: 
+        root.manager.transition.direction = 'left'
+        root.manager.current = root.target
+
+<StartUpPage>:
+    name: "start_up"
+    BoxLayout:
+        orientation: "vertical"
+        spacing: 10
+        Label:
+            id: lbl_start_up
+            text: "Start up"
+            size_hint: 1, 0.15
+        BoxLayout:
+            orientation: "horizontal"
+            size_hint: 1, 1
+            padding: [10, 0, 10, 0]
+            spacing: 10
+            PageChanger:
+                text: "Manual override >"
+                manager:root.manager
+                target: "manual_root"
+            PageChanger:
+                text: "Jobs >"
+                manager:root.manager
+                target: "jobs"
+            PageChanger:
+                text: "Data In >"
+                manager:root.manager
+                target: "data_in"
+        Footer:
+            btn_text: root.back_text
+            back_press: root.back
+
+
+<ManualRoot>:
+    name: "manual_root"
+    BoxLayout:
+        orientation: "vertical"
+        spacing: 10
+        Label:
+            id: lbl_manual_override
+            text: "Manual override"
+            size_hint: 1, 0.15
+        GridLayout:
+            cols: 3
+            spacing: 10            
+            padding: [10, 0, 10, 0]
+            size_hint: 1, 1
+            Button:
+                text: "Home"
+                on_press: root.go_home()
+            Button:
+                text: "Advance"
+                on_press: root.run()
+            PageChanger:
+                text: "Capture >"
+                manager:root.manager
+                target: "capture"
+            Button:
+                text: "Next"
+                on_press: root.go_next()
+            Button:
+                text: "Stop"
+                on_press: root.stop()
+            PageChanger:
+                text: "Stream >"
+                manager:root.manager
+                target: "stream"
+        Footer:
+            btn_text: root.back_text
+            back_press: root.back
+
+<ManualCapture>:
+    name: "capture"
+    BoxLayout:
+        orientation: "vertical"
+        spacing: 10
+        BoxLayout:
+            orientation: "horizontal"
+            size_hint: 1, 1
+            Label:
+                text: "Capture"
+        Footer:
+            btn_text: root.back_text
+            back_press: root.back
+
+<ManualStream>:
+    name: "stream"
+    BoxLayout:
+        orientation: "vertical"
+        spacing: 10
+        BoxLayout:
+            orientation: "horizontal"
+            size_hint: 1, 1
+            Label:
+                text: "Streaming"
+        Footer:
+            btn_text: root.back_text
+            back_press: root.back
+
+<Jobs>:
+    name: "jobs"
+    BoxLayout:
+        orientation: "vertical"
+        spacing: 10
+        BoxLayout:
+            orientation: "horizontal"
+            size_hint: 1, 1
+            Label:
+                text: "Jobs"
+        Footer:
+            btn_text: root.back_text
+            back_press: root.back
+
+<JobsView>:
+    name: "view_jobs"
+    BoxLayout:
+        orientation: "vertical"
+        spacing: 10
+        BoxLayout:
+            orientation: "horizontal"
+            size_hint: 1, 1
+            Label:
+                text: "Visualize jobs"
+        Footer:
+            btn_text: root.back_text
+            back_press: root.back
+
+<JobsEditAdd>:
+    name: "edit_jobs"
+    BoxLayout:
+        orientation: "vertical"
+        spacing: 10
+        BoxLayout:
+            orientation: "horizontal"
+            size_hint: 1, 1
+            Label:
+                text: "Edit jobs"
+        Footer:
+            btn_text: root.back_text
+            back_press: root.back
+
+<JobsLog>:
+    name: "log_jobs"
+    BoxLayout:
+        orientation: "vertical"
+        spacing: 10
+        BoxLayout:
+            orientation: "horizontal"
+            size_hint: 1, 1
+            Label:
+                text: "Logs"
+        Footer:
+            btn_text: root.back_text
+            back_press: root.back
+
+<DataIn>:
+    name: "data_in"
+    BoxLayout:
+        orientation: "vertical"
+        spacing: 10
+        BoxLayout:
+            orientation: "horizontal"
+            size_hint: 1, 1
+            Label:
+                text: "Data In"
+        Footer:
+            btn_text: root.back_text
+            back_press: root.back
+
+<DataInEdit>:
+    name: "edit_data_in"
+    BoxLayout:
+        orientation: "vertical"
+        spacing: 10
+        BoxLayout:
+            orientation: "horizontal"
+            size_hint: 1, 1
+            Label:
+                text: "Edit data in"
+        Footer:
+            btn_text: root.back_text
+            back_press: root.back
