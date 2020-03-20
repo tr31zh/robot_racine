@@ -30,7 +30,9 @@ class ManualRoot(MyScreen):
     back_target = "start_up"
 
     def go_home(self):
+        self.ids["mo_home"].text = "Going Home"
         drive.go_home()
+        self.ids["mo_home"].text = "Went Home"
 
     def run(self):
         drive.run()

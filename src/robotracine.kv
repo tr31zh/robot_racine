@@ -31,6 +31,15 @@
     DataInEdit:
         id: data_in_edit_page
 
+<Header@BoxLayout>:
+    orientation: "horizontal"
+    size_hint: 1, 0.15
+    page_title: ""
+    page_message
+    Label:
+        id: lbl_page_title
+        text: page_title
+
 <Footer@BoxLayout>:
     orientation: "horizontal"
     padding: 10
@@ -98,6 +107,7 @@
             padding: [10, 0, 10, 0]
             size_hint: 1, 1
             Button:
+                id: mo_home
                 text: "Home"
                 on_press: root.go_home()
             Button:
