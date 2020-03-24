@@ -1,6 +1,53 @@
-#:kivy 1.10.0
+#:kivy 1.11.1
 
 <RootWidget>:
+    lbl_title: lbl_title
+    lbl_info: lbl_info
+    bt_back: bt_back
+    lbl_status: lbl_status
+    page_manager: page_manager
+    orientation: "vertical"
+    BoxLayout:
+        orientation: "horizontal"        
+        padding: 10
+        size_hint: 1, 0.2
+        Label:
+            id: lbl_title
+            size_hint: 0.4, 1
+            markup: True
+            text_size: self.size
+            halign: 'left'
+            valign: 'middle'
+            text: page_manager.format_text("Start Up", True, 30)
+        Label:
+            id: lbl_info
+            text: "Welcome to RobotRacine control center"
+            size_hint: 1, 1
+    MyPageManager:
+        id: page_manager
+        lbl_title: lbl_title
+        lbl_info: lbl_info
+        bt_back: bt_back
+        lbl_status: lbl_status
+    BoxLayout:
+        orientation: "horizontal"
+        padding: 10
+        size_hint: 1, 0.2
+        btn_text: ""
+        back_press: None
+        Label:
+            id: lbl_status
+            text: "Status message"
+            size_hint: 1, 1
+        Button:
+            id: bt_back
+            text: "< Exit"
+            size_hint: 0.25, 1
+            on_press: 
+                page_manager.on_back()
+                bt_back.text = page_manager.back_text()
+
+<MyPageManager>:
     StartUpPage:
         id: startup_page
 
@@ -10,17 +57,11 @@
     ManualCapture:
         id: capture_page
 
-    ManualStream:
-        id: stream_page
-
     Jobs:
         id: jobs_page
 
-    JobsView:
-        id: view_page
-
-    JobsEditAdd:
-        id: job_edit_page
+    JobsManage:
+        id: manage_jobs_page
 
     JobsLog:
         id: log_page
@@ -31,214 +72,200 @@
     DataInEdit:
         id: data_in_edit_page
 
-<Header@BoxLayout>:
-    orientation: "horizontal"
-    size_hint: 1, 0.15
-    page_title: ""
-    page_message
-    Label:
-        id: lbl_page_title
-        text: page_title
+<ImageButton@Button>:
+    orientation: "vertical"
+    lbl_text: ""
+    image_path: ""
+    image_pos: "top"
+    BoxLayout:
+        orientation: "vertical" if root.image_pos == "top" else "horizontal"
+        pos: root.pos
+        size: root.size
+        Image:
+            canvas.before:
+                Color:
+                    rgba: 0.9,0.9,0.9,1
+                Rectangle:
+                    pos:self.pos
+                    size:self.size
+            source: root.image_path
+            size_hint: [1, 1] if root.image_pos == "top" else [0.3, 1]
+        Label:
+            size_hint: [1, 0.3] if root.image_pos == "top" else [1, 1]
+            text: root.lbl_text
 
-<Footer@BoxLayout>:
-    orientation: "horizontal"
-    padding: 10
-    size_hint: 1, 0.2
-    btn_text: ""
-    back_press: None
-    Label:
-        text: ""
-        size_hint: 1, 1
-    Button:
-        text: root.btn_text
-        on_press: root.back_press()
-        size_hint: 0.25, 1
-
-<PageChanger@Button>:
+<PageChanger@ImageButton>:
     target: ""
     manager: None
-    on_press: 
-        root.manager.transition.direction = 'left'
-        root.manager.current = root.target
+    on_press: root.manager.set_active_page(root.target, "left")
 
+<SelectableLabel>:
+    # Draw a background to indicate selection
+    canvas.before:
+        Color:
+            rgba: (1, 0, 0, 1) if self.selected else (.0, 0.9, .1, .3)
+        Rectangle:
+            pos: self.pos
+            size: self.size
+        Color:
+            rgba: (0, 0.9, .1, .3)
+        Rectangle:
+            pos: self.pos
+            size: self.size
+    
 <StartUpPage>:
     name: "start_up"
     BoxLayout:
-        orientation: "vertical"
+        orientation: "horizontal"
+        size_hint: 1, 1
+        padding: [10, 0, 10, 0]
         spacing: 10
-        Label:
-            id: lbl_start_up
-            text: "Start up"
-            size_hint: 1, 0.15
-        BoxLayout:
-            orientation: "horizontal"
-            size_hint: 1, 1
-            padding: [10, 0, 10, 0]
-            spacing: 10
-            PageChanger:
-                text: "Manual override >"
-                manager:root.manager
-                target: "manual_root"
-            PageChanger:
-                text: "Jobs >"
-                manager:root.manager
-                target: "jobs"
-            PageChanger:
-                text: "Data In >"
-                manager:root.manager
-                target: "data_in"
-        Footer:
-            btn_text: root.back_text
-            back_press: root.back
-
+        PageChanger:
+            lbl_text: "Manual override >"
+            manager:root.manager
+            target: "manual_root"
+            image_path: "../resources/hand1.png"
+        PageChanger:
+            lbl_text: "Jobs >"
+            manager:root.manager
+            target: "jobs"
+            image_path: "../resources/servers.png"
+        PageChanger:
+            lbl_text: "Data In >"
+            manager:root.manager
+            target: "data_in"
+            image_path: "../resources/paperscience.png"
 
 <ManualRoot>:
     name: "manual_root"
-    BoxLayout:
-        orientation: "vertical"
+    GridLayout:
+        cols: 3
         spacing: 10
-        Label:
-            id: lbl_manual_override
-            text: "Manual override"
-            size_hint: 1, 0.15
-        GridLayout:
-            cols: 3
-            spacing: 10            
-            padding: [10, 0, 10, 0]
-            size_hint: 1, 1
-            Button:
-                id: mo_home
-                text: "Home"
-                on_press: root.go_home()
-            Button:
-                text: "Advance"
-                on_press: root.run()
-            PageChanger:
-                text: "Capture >"
-                manager:root.manager
-                target: "capture"
-            Button:
-                text: "Next"
-                on_press: root.go_next()
-            Button:
-                text: "Stop"
-                on_press: root.stop()
-            PageChanger:
-                text: "Stream >"
-                manager:root.manager
-                target: "stream"
-        Footer:
-            btn_text: root.back_text
-            back_press: root.back
+        padding: [10, 0, 10, 0]
+        size_hint: 1, 1
+        ImageButton:
+            id: mo_home
+            lbl_text: "Home"
+            image_path: "../resources/househome.png"
+            image_pos: "top"
+            on_press: root.go_home()
+        ImageButton:
+            lbl_text: "Start"
+            image_path: "../resources/ecocircuit.png"
+            image_pos: "top"
+            on_press: root.run()
+        PageChanger:
+            lbl_text: "Capture >"
+            manager:root.manager
+            target: "capture"
+            image_path: "../resources/camerapros.png"
+        ImageButton:
+            lbl_text: "Next"
+            image_path: "../resources/right.png"
+            image_pos: "top"
+            on_press: root.go_next()
+        ImageButton:
+            lbl_text: "Stop"
+            image_path: "../resources/stop.png"
+            image_pos: "top"
+            on_press: root.stop()
 
 <ManualCapture>:
     name: "capture"
     BoxLayout:
-        orientation: "vertical"
-        spacing: 10
-        BoxLayout:
-            orientation: "horizontal"
-            size_hint: 1, 1
-            Label:
-                text: "Capture"
-        Footer:
-            btn_text: root.back_text
-            back_press: root.back
-
-<ManualStream>:
-    name: "stream"
-    BoxLayout:
-        orientation: "vertical"
-        spacing: 10
-        BoxLayout:
-            orientation: "horizontal"
-            size_hint: 1, 1
-            Label:
-                text: "Streaming"
-        Footer:
-            btn_text: root.back_text
-            back_press: root.back
+        orientation: "horizontal"
+        size_hint: 1, 1
+        spacing: 10        
+        padding: [10, 0, 10, 0]
+        ImageButton:
+            lbl_text: "Snap"
+            image_path: "../resources/psbuttoncircle.png"
+            size_hint: 0.3, 1
+            image_pos: "top"
+            on_press: root.snap()
+        Image:
+            canvas.before:
+                Color:
+                    rgba: 0,0,0,1
+                Rectangle:
+                    pos:self.pos
+                    size:self.size
+            source: "../demo/rr_demo_image.jpg"
 
 <Jobs>:
     name: "jobs"
     BoxLayout:
-        orientation: "vertical"
+        orientation: "horizontal"
+        size_hint: 1, 1
+        padding: [10, 0, 10, 0]
         spacing: 10
+        PageChanger:
+            lbl_text: "Manage >"
+            manager:root.manager
+            target: "manage_jobs"
+            image_path: "../resources/eyes.png"
+        PageChanger:
+            lbl_text: "Log >"
+            manager:root.manager
+            target: "log_jobs"
+            image_path: "../resources/printer.png"
+
+<JobsManage>:
+    name: "manage_jobs"
+    jobs_list: jobs_list
+    on_pre_enter: self.init_jobs()
+    BoxLayout:
+        orientation: "horizontal"
+        size_hint: 1, 1
         BoxLayout:
-            orientation: "horizontal"
-            size_hint: 1, 1
+            size_hint: 0.3, 1
+            orientation: "vertical"
             Label:
                 text: "Jobs"
-        Footer:
-            btn_text: root.back_text
-            back_press: root.back
+                size_hint: 1, 0.1
+            RecycleView:
+                id: jobs_list
+                viewclass: 'SelectableLabel'
+                SelectableRecycleBoxLayout:
+                    spacing: 4
+                    padding: 10
+                    default_size: None, dp(40)
+                    default_size_hint: 1, None
+                    size_hint_y: None
+                    height: self.minimum_height
+                    orientation: 'vertical'
+                    multiselect: False
+                    touch_multiselect: True
+            ImageButton:
+                id: add_job
+                lbl_text: "Add..."
+                image_path: "../resources/bugsymboladd.png"
+                image_pos: "left"
+                size_hint: 1, 0.1
+        Label:
+            text: "Job data"
 
-<JobsView>:
-    name: "view_jobs"
-    BoxLayout:
-        orientation: "vertical"
-        spacing: 10
-        BoxLayout:
-            orientation: "horizontal"
-            size_hint: 1, 1
-            Label:
-                text: "Visualize jobs"
-        Footer:
-            btn_text: root.back_text
-            back_press: root.back
-
-<JobsEditAdd>:
-    name: "edit_jobs"
-    BoxLayout:
-        orientation: "vertical"
-        spacing: 10
-        BoxLayout:
-            orientation: "horizontal"
-            size_hint: 1, 1
-            Label:
-                text: "Edit jobs"
-        Footer:
-            btn_text: root.back_text
-            back_press: root.back
 
 <JobsLog>:
     name: "log_jobs"
     BoxLayout:
-        orientation: "vertical"
-        spacing: 10
-        BoxLayout:
-            orientation: "horizontal"
-            size_hint: 1, 1
-            Label:
-                text: "Logs"
-        Footer:
-            btn_text: root.back_text
-            back_press: root.back
+        orientation: "horizontal"
+        size_hint: 1, 1
+        Label:
+            text: "Logs"
 
 <DataIn>:
     name: "data_in"
     BoxLayout:
-        orientation: "vertical"
-        spacing: 10
-        BoxLayout:
-            orientation: "horizontal"
-            size_hint: 1, 1
-            Label:
-                text: "Data In"
-        Footer:
-            btn_text: root.back_text
-            back_press: root.back
+        orientation: "horizontal"
+        size_hint: 1, 1
+        Label:
+            text: "Data In"
 
 <DataInEdit>:
     name: "edit_data_in"
     BoxLayout:
-        orientation: "vertical"
-        spacing: 10
-        BoxLayout:
-            orientation: "horizontal"
-            size_hint: 1, 1
-            Label:
-                text: "Edit data in"
-        Footer:
-            btn_text: root.back_text
-            back_press: root.back
+        orientation: "horizontal"
+        size_hint: 1, 1
+        Label:
+            text: "Edit data in"

@@ -1,0 +1,100 @@
+{
+  "jobs": [
+    {
+      "name": "Job 1",
+      "description": "Job linked to the first 10 plants of experiment 1",
+      "owner": "no one",
+      "mail_to": ["no_one@some.mail", "no_two@some.mail", "no_three@some.mail"],
+      "plants": [
+        "exp_1_p_1",
+        "exp_1_p_2",
+        "exp_1_p_3",
+        "exp_1_p_4",
+        "exp_1_p_5",
+        "exp_1_p_6",
+        "exp_1_p_7",
+        "exp_1_p_8",
+        "exp_1_p_9",
+        "exp_1_p_10"
+      ],
+      "repetition_mode": "every",
+      "repetition_unit": "minutes",
+      "repetition_tile": "30",
+      "timestamp_start": "20200324 15:00:48",
+      "timestamp_end": "20200403 15:00:48"
+    },
+    {
+      "name": "Job 2",
+      "description": "Job linked to the last 10 plants of experiment 1",
+      "owner": "two one",
+      "mail_to": ["two_one@some.mail"],
+      "plants": [
+        "exp_1_p_11",
+        "exp_1_p_12",
+        "exp_1_p_13",
+        "exp_1_p_14",
+        "exp_1_p_15",
+        "exp_1_p_16",
+        "exp_1_p_17",
+        "exp_1_p_18",
+        "exp_1_p_19",
+        "exp_1_p_20"
+      ],
+      "repetition_mode": "at",
+      "repetition_unit": "hours",
+      "repetition_tile": [2, 4, 6, 8],
+      "timestamp_start": "20200324 15:00:48",
+      "timestamp_end": "20200403 15:00:48"
+    },
+    {
+      "name": "Job 3",
+      "description": "Job linked to the first 10 plants of experiment 2",
+      "owner": "some one",
+      "mail_to": [
+        "that_one@some.mail",
+        "those_two@some.mail",
+        "thee_three@some.mail"
+      ],
+      "plants": [
+        "exp_2_p_1",
+        "exp_2_p_2",
+        "exp_2_p_3",
+        "exp_2_p_4",
+        "exp_2_p_5",
+        "exp_2_p_6",
+        "exp_2_p_7",
+        "exp_2_p_8",
+        "exp_2_p_9",
+        "exp_2_p_10"
+      ],
+      "repetition_mode": "every",
+      "repetition_unit": "day",
+      "repetition_tile": "1",
+      "timestamp_start": "20200403 15:00:48",
+      "timestamp_end": "20200413 15:00:48"
+    },
+    {
+      "name": "Job 4",
+      "description": "Job linked to the last 10 plants of experiment 2",
+      "owner": "mehh",
+      "mail_to": ["hi@some.mail", "ha@some.mail", "hu@some.mail"],
+      "plants": [
+        "exp_2_p_11",
+        "exp_2_p_12",
+        "exp_2_p_13",
+        "exp_2_p_14",
+        "exp_2_p_15",
+        "exp_2_p_16",
+        "exp_2_p_17",
+        "exp_2_p_18",
+        "exp_2_p_19",
+        "exp_2_p_20"
+      ],
+      "repetition_mode": "at",
+      "repetition_unit": "minutes",
+      "repetition_tile": [15, 45],
+      "timestamp_start": "20200403 15:00:48",
+      "timestamp_end": "20200423 15:00:48"
+    }
+  ]
+}
