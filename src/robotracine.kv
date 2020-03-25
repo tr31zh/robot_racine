@@ -72,6 +72,29 @@
     DataInEdit:
         id: data_in_edit_page
 
+<LabelledInput@BoxLayout>:
+    orientation: "horizontal"
+    label_text: ""
+    input_text: ""
+    input_read_only: False
+    input_multi_line: False
+    label_size_hint: 1, 1
+    padding: 6
+    Label:
+        text: root.label_text
+        size_hint: root.label_size_hint
+        text_size: self.size        
+        halign: 'left'
+        valign: 'middle'
+    ScrollView:
+        do_scroll_x: False
+        do_scroll_y: True
+        TextInput:
+            size_hint_y: None            
+            text: root.input_text
+            multiline: root.input_multi_line
+            readonly: root.input_read_only
+
 <ImageButton@Button>:
     orientation: "vertical"
     lbl_text: ""
@@ -93,6 +116,22 @@
         Label:
             size_hint: [1, 0.3] if root.image_pos == "top" else [1, 1]
             text: root.lbl_text
+
+<ImageOnlyButton@Button>:
+    orientation: "vertical"
+    image_path: ""
+    BoxLayout:
+        orientation: "vertical"
+        pos: root.pos
+        size: root.size
+        Image:
+            canvas.before:
+                Color:
+                    rgba: 0.9,0.9,0.9,1
+                Rectangle:
+                    pos:self.pos
+                    size:self.size
+            source: root.image_path
 
 <PageChanger@ImageButton>:
     target: ""
@@ -214,21 +253,37 @@
     name: "manage_jobs"
     jobs_list: jobs_list
     on_pre_enter: self.init_jobs()
+    job_description: job_description
+    job_owner: job_owner
+    job_mail_list: job_mail_list
+    time_mode: time_mode
+    time_value: time_value
+    time_unit: time_unit
+    label_hiont_size: 0.20
+    date_start: date_start
+    date_end: date_end
+    job_plants: job_plants
     BoxLayout:
         orientation: "horizontal"
         size_hint: 1, 1
+        padding: [10, 0, 10, 0]
         BoxLayout:
             size_hint: 0.3, 1
             orientation: "vertical"
             Label:
-                text: "Jobs"
+                text: "[b]Jobs:[/b]"
+                markup: True
+                text_size: self.size    
+                halign: 'left'
+                valign: 'middle'
                 size_hint: 1, 0.1
             RecycleView:
                 id: jobs_list
                 viewclass: 'SelectableLabel'
+                page: root
                 SelectableRecycleBoxLayout:
                     spacing: 4
-                    padding: 10
+                    padding: [0, 10, 0, 10]
                     default_size: None, dp(40)
                     default_size_hint: 1, None
                     size_hint_y: None
@@ -239,11 +294,101 @@
             ImageButton:
                 id: add_job
                 lbl_text: "Add..."
-                image_path: "../resources/bugsymboladd.png"
+                image_path: "../resources/Add.png"
                 image_pos: "left"
-                size_hint: 1, 0.1
-        Label:
-            text: "Job data"
+                size_hint: 1, 0.12
+        BoxLayout:
+            orientation: "vertical"
+            default_line_height: 0.6
+            LabelledInput:
+                id: job_description
+                label_text: "Description:"
+                input_text: ""
+                input_multi_line: True
+                label_size_hint: root.label_hiont_size, 1
+                size_hint: 1, 1
+            LabelledInput:
+                id: job_owner
+                label_text: "Owner:"
+                input_text: ""
+                label_size_hint: root.label_hiont_size, 1
+                size_hint: 1, self.parent.default_line_height
+            LabelledInput:
+                id: job_mail_list
+                label_text: "Mail to:"
+                input_text: ""
+                label_size_hint: root.label_hiont_size, 1
+                input_multi_line: True
+                size_hint: 1, 1
+            BoxLayout:
+                orientation: "horizontal"                
+                padding: 6
+                size_hint: 1, self.parent.default_line_height
+                Label:
+                    text: "Repeat:"
+                    text_size: self.size        
+                    halign: 'left'
+                    valign: 'middle'
+                    size_hint: 0.6, 1
+                Spinner:
+                    id:time_mode
+                    text: '-'
+                    values: 'every', 'at'
+                TextInput:
+                    id: time_value
+                    text: "0"
+                Spinner:
+                    id: time_unit
+                    text: '-'
+                    values: 'minutes', 'hours', 'days'
+            BoxLayout:
+                orientation: "horizontal"
+                padding: 6
+                size_hint: 1, self.parent.default_line_height
+                Label:
+                    text: "Start:"
+                    text_size: self.size    
+                    size_hint: 0.5, 1    
+                    halign: 'left'
+                    valign: 'middle'
+                TextInput:
+                    id: date_start
+                    text: ""
+                Label:
+                    text: "End:"
+                    size_hint: 0.5, 1
+                    text_size: self.size        
+                    halign: 'left'
+                    valign: 'middle'
+                TextInput:
+                    id: date_end
+                    text: ""
+            LabelledInput:
+                id: job_plants
+                label_text: "Plants:"
+                input_text: ""
+                input_multi_line: True
+                input_read_only: True
+                label_size_hint: root.label_hiont_size, 1                
+                size_hint: 1, 1
+        BoxLayout:
+            orientation: "vertical"
+            padding: 10  
+            spacing: 10
+            size_hint: 0.2, 1
+            ImageOnlyButton:
+                image_path: "../resources/play.png"
+                on_press: root.resume_job()
+            ImageOnlyButton:
+                image_path: "../resources/pause.png"
+                on_press: root.pause_job()
+            ImageOnlyButton:
+                image_path: "../resources/penadd.png"
+                on_press: root.save_job()
+            ImageOnlyButton:
+                image_path: "../resources/penremove.png"
+                on_press: root.delete_job()
+
 
 
 <JobsLog>:

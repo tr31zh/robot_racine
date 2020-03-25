@@ -54,9 +54,18 @@ class SelectableLabel(RecycleDataViewBehavior, Label):
     def apply_selection(self, rv, index, is_selected):
         """ Respond to the selection of items in the view. """
         self.selected = is_selected
+        if (
+            self.selected
+            and hasattr(rv, "page")
+            and hasattr(rv.page, "update_data")
+        ):
+            rv.page.update_data(self.text)
 
 
 root_folder = "./data/" if os.path.isdir("./data/") else "../data"
+plant_data = pd.read_csv(os.path.join(root_folder, "plants_data.csv"))
+with open(os.path.join(root_folder, "jobs_data.json"), "r") as f:
+    jobs_data = json.load(f)
 
 
 class MyPageManager(ScreenManager):
@@ -64,10 +73,6 @@ class MyPageManager(ScreenManager):
     lbl_title = ObjectProperty(None)
     lbl_info = ObjectProperty(None)
     lbl_status = ObjectProperty(None)
-
-    plant_data = pd.read_csv(os.path.join(root_folder, "plants_data.csv"))
-    with open(os.path.join(root_folder, "jobs_data.json"), "r") as f:
-        jobs_data = json.load(f)
 
     def on_back(self):
         self.current_screen.back()
@@ -136,6 +141,7 @@ class ManualCapture(MyScreen):
     back_text = "< Back"
     back_target = "manual_root"
     title_text = "Manual Capture"
+    info_text = "Set the camera and take snapshots"
 
     bt_back = ObjectProperty(None)
 
@@ -157,11 +163,40 @@ class JobsManage(MyScreen):
     info_text = "About the jobs..."
     jobs_list = "Take a snapshot"
 
+    job_description = ObjectProperty(None)
+
     def init_jobs(self):
-        self.jobs_list.data = [
-            {"text": j["name"]} for j in self.manager.jobs_data["jobs"]
-        ]
+        self.jobs_list.data = [{"text": j["name"]} for j in jobs_data["jobs"]]
         print("init jobs")
+
+    def get_current_description(self):
+        return "description"
+
+    def update_data(self, name):
+        for job in jobs_data["jobs"]:
+            if job["name"] == name:
+                self.job_description.input_text = job["description"]
+                self.job_owner.input_text = job["owner"]
+                self.job_mail_list.input_text = "; ".join(job["mail_to"])
+                self.time_mode.text = job["repetition_mode"]
+                self.time_value.text = str(job["repetition_value"])
+                self.time_unit.text = job["repetition_unit"]
+                self.date_start.text = job["timestamp_start"]
+                self.date_end.text = job["timestamp_end"]
+                self.job_plants.input_text = "; ".join(job["plants"])
+                continue
+
+    def save_job(self):
+        print("Save job")
+
+    def resume_job(self):
+        print("Save job")
+
+    def pause_job(self):
+        print("Pause job")
+
+    def delete_job(self):
+        print("Delete job")
 
 
 class JobsLog(MyScreen):
