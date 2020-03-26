@@ -376,17 +376,25 @@
             padding: 10  
             spacing: 10
             size_hint: 0.2, 1
-            ImageOnlyButton:
+            ImageButton:
                 image_path: "../resources/play.png"
+                lbl_text: "Resume"
+                image_pos: "top"
                 on_press: root.resume_job()
-            ImageOnlyButton:
+            ImageButton:
                 image_path: "../resources/pause.png"
+                lbl_text: "Pause"
+                image_pos: "top"
                 on_press: root.pause_job()
-            ImageOnlyButton:
+            ImageButton:
                 image_path: "../resources/penadd.png"
+                lbl_text: "Save"
+                image_pos: "top"
                 on_press: root.save_job()
-            ImageOnlyButton:
+            ImageButton:
                 image_path: "../resources/penremove.png"
+                lbl_text: "Delete"
+                image_pos: "top"
                 on_press: root.delete_job()
 
 
