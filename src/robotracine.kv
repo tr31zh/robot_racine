@@ -37,7 +37,10 @@
         back_press: None
         Label:
             id: lbl_status
-            text: "Status message"
+            text_size: self.size
+            halign: 'left'
+            valign: 'middle'
+            text: "RR control started"
             size_hint: 1, 1
         Button:
             id: bt_back
@@ -69,13 +72,11 @@
     DataIn:
         id: data_in_page
 
-    DataInEdit:
-        id: data_in_edit_page
-
 <LabelledInput@BoxLayout>:
     orientation: "horizontal"
     label_text: ""
     input_text: ""
+    text_holder: text_holder
     input_read_only: False
     input_multi_line: False
     label_size_hint: 1, 1
@@ -87,13 +88,14 @@
         halign: 'left'
         valign: 'middle'
     ScrollView:
-        do_scroll_x: False
-        do_scroll_y: True
+        id: scrlv
         TextInput:
-            size_hint_y: None            
+            id: text_holder
             text: root.input_text
             multiline: root.input_multi_line
             readonly: root.input_read_only
+            size_hint: 1, None
+            height: max( (len(self._lines)+1) * self.line_height, scrlv.height)
 
 <ImageButton@Button>:
     orientation: "vertical"
@@ -127,11 +129,71 @@
         Image:
             canvas.before:
                 Color:
-                    rgba: 0.9,0.9,0.9,1
+                    rgba: 0.9,0.9,0.9,0
                 Rectangle:
                     pos:self.pos
                     size:self.size
             source: root.image_path
+
+<ModalDialog>:
+    id: modal_dialog
+    modal_result: 0
+    modal_dialog_title:modal_dialog_title
+    modal_dialog_body:modal_dialog_body
+    BoxLayout:
+        orientation: "vertical"
+        spacing: 10
+        padding: 10
+        Label:
+            id: modal_dialog_title
+            text: "[b]Modal dialog title[/b]"
+            markdown:True            
+            text_size: self.size
+            halign: 'left'
+            valign: 'middle'
+            size_hint: 1, 0.2
+        Label:               
+            size_hint: 1, 0.02
+            canvas.before:
+                Color:
+                    rgba: 0.5, 0.8, 0.5, 1
+                Rectangle:
+                    pos: self.pos
+                    size: self.size
+        Label:
+            id: modal_dialog_body
+            text: "Body of modal dialog"
+        Label:               
+            size_hint: 1, 0.02
+            canvas.before:
+                Color:
+                    rgba: 0.5, 0.8, 0.5, 1
+                Rectangle:
+                    pos: self.pos
+                    size: self.size
+        BoxLayout:
+            orientation: "horizontal"
+            size_hint: 1, 0.3
+            spacing: 10
+            padding: 10
+            Label:
+                text: ""                
+            ImageButton:
+                id: add_job
+                lbl_text: "OK"
+                image_path: "../resources/catsymbolapprove.png"
+                image_pos: "left"
+                on_press:
+                    root.modal_result = 1
+                    root.dismiss()
+            ImageButton:
+                id: add_job
+                lbl_text: "Cancel"
+                image_path: "../resources/catsymbolremove.png"
+                image_pos: "left"
+                on_press:
+                    root.modal_result = 0
+                    root.dismiss()
 
 <PageChanger@ImageButton>:
     target: ""
@@ -139,7 +201,7 @@
     on_press: root.manager.set_active_page(root.target, "left")
 
 <SelectableLabel>:
-    # Draw a background to indicate selection
+    guid: ""
     canvas.before:
         Color:
             rgba: (1, 0, 0, 1) if self.selected else (.0, 0.9, .1, .3)
@@ -249,17 +311,141 @@
             target: "log_jobs"
             image_path: "../resources/printer.png"
 
+<PlantSelector>:
+    BoxLayout:
+        orientation: "vertical"
+        padding: [10, 0, 10, 0]
+        spacing: 10
+        modal_result: 0
+        bt_add: bt_add
+        available_plants: available_plants
+        selected_plants: selected_plants
+        BoxLayout:
+            size_hint: 1, 0.1
+            orientation: "horizontal"
+            Label:
+                text: "Available plants"
+            Label:
+                text: "Linked plants"
+        Label:               
+            size_hint: 1, 0.01
+            canvas.before:
+                Color:
+                    rgba: 0.5, 0.8, 0.5, 1
+                Rectangle:
+                    pos: self.pos
+                    size: self.size
+        BoxLayout:
+            size_hint: 1, 0.2
+            orientation: "horizontal"
+            padding: 10
+            spacing: 10
+            Button:
+                id: bt_add
+                on_press: root.add_to_selection()
+                BoxLayout:
+                    orientation: "horizontal"
+                    pos: self.parent.pos
+                    size: self.parent.size
+                    Label:
+                        text: "Add"
+                    Image:
+                        size_hint: 0.2, 1
+                        canvas.before:
+                            Color:
+                                rgba: 0.9,0.9,0.9,1
+                            Rectangle:
+                                pos:self.pos
+                                size:self.size
+                        source: "../resources/redarrowright.png"
+            Button:
+                id: bt_add
+                on_press: root.remove_from_selection()
+                BoxLayout:
+                    orientation: "horizontal"
+                    pos: self.parent.pos
+                    size: self.parent.size
+                    Image:
+                        size_hint: 0.2, 1
+                        canvas.before:
+                            Color:
+                                rgba: 0.9,0.9,0.9,1
+                            Rectangle:
+                                pos:self.pos
+                                size:self.size
+                        source: "../resources/redarrowleft.png"
+                    Label:
+                        text: "Remove"
+        BoxLayout:
+            orientation: "horizontal"
+            padding: 6
+            spacing: 6
+            RecycleView:
+                id: available_plants
+                viewclass: 'SelectableLabel'
+                page: root
+                SelectableRecycleBoxLayout:
+                    spacing: 4
+                    padding: [0, 10, 0, 10]
+                    default_size: None, dp(40)
+                    default_size_hint: 1, None
+                    size_hint_y: None
+                    height: self.minimum_height
+                    orientation: 'vertical'
+                    multiselect: True
+                    touch_multiselect: True
+            RecycleView:
+                id: selected_plants
+                viewclass: 'SelectableLabel'
+                SelectableRecycleBoxLayout:
+                    spacing: 4
+                    padding: [0, 10, 0, 10]
+                    default_size: None, dp(40)
+                    default_size_hint: 1, None
+                    size_hint_y: None
+                    height: self.minimum_height
+                    orientation: 'vertical'
+                    multiselect: True
+                    touch_multiselect: True
+        BoxLayout:
+            orientation: "horizontal"
+            spacing: 10
+            padding: 10
+            size_hint: 1, 0.3
+            Label:
+                text: ""                
+            ImageButton:
+                id: add_job
+                lbl_text: "OK"
+                image_path: "../resources/catsymbolapprove.png"
+                image_pos: "left"
+                on_press:
+                    root.modal_result = 1
+                    root.dismiss()
+            ImageButton:
+                id: add_job
+                lbl_text: "Cancel"
+                image_path: "../resources/catsymbolremove.png"
+                image_pos: "left"
+                on_press:
+                    root.modal_result = 0
+                    root.dismiss()
+
 <JobsManage>:
     name: "manage_jobs"
     jobs_list: jobs_list
     on_pre_enter: self.init_jobs()
+    job_name: job_name
+    job_guid: ""
+    job_state: job_state
+    job_plant_list: job_plant_list
     job_description: job_description
     job_owner: job_owner
     job_mail_list: job_mail_list
     time_mode: time_mode
     time_value: time_value
     time_unit: time_unit
-    label_hiont_size: 0.20
+    label_hint_size: 0.20
     date_start: date_start
     date_end: date_end
     job_plants: job_plants
@@ -290,36 +476,49 @@
                     height: self.minimum_height
                     orientation: 'vertical'
                     multiselect: False
-                    touch_multiselect: True
+                    touch_multiselect: False
             ImageButton:
                 id: add_job
                 lbl_text: "Add..."
                 image_path: "../resources/Add.png"
                 image_pos: "left"
                 size_hint: 1, 0.12
+                on_press: root.new_job()
         BoxLayout:
             orientation: "vertical"
             default_line_height: 0.6
+            BoxLayout:
+                orientation: "horizontal"
+                size_hint: 1, self.parent.default_line_height
+                LabelledInput:
+                    id: job_name
+                    label_text: "Name:"
+                    input_text: ""
+                    label_size_hint: root.label_hint_size + 0.04, 1
+                    size_hint: 1, 1
+                Label:
+                    id: job_state
+                    text: ""
+                    size_hint: 0.15, 1
             LabelledInput:
                 id: job_description
                 label_text: "Description:"
                 input_text: ""
                 input_multi_line: True
-                label_size_hint: root.label_hiont_size, 1
-                size_hint: 1, 1
+                label_size_hint: root.label_hint_size, 1
+                size_hint: 1, 0.8
             LabelledInput:
                 id: job_owner
                 label_text: "Owner:"
                 input_text: ""
-                label_size_hint: root.label_hiont_size, 1
+                label_size_hint: root.label_hint_size, 1
                 size_hint: 1, self.parent.default_line_height
             LabelledInput:
                 id: job_mail_list
                 label_text: "Mail to:"
                 input_text: ""
-                label_size_hint: root.label_hiont_size, 1
-                input_multi_line: True
-                size_hint: 1, 1
+                label_size_hint: root.label_hint_size, 1
+                size_hint: 1, self.parent.default_line_height
             BoxLayout:
                 orientation: "horizontal"                
                 padding: 6
@@ -333,7 +532,7 @@
                 Spinner:
                     id:time_mode
                     text: '-'
-                    values: 'every', 'at'
+                    values: 'every', 'at', 'once'
                 TextInput:
                     id: time_value
                     text: "0"
@@ -358,19 +557,33 @@
                     text: "End:"
                     size_hint: 0.5, 1
                     text_size: self.size        
-                    halign: 'left'
+                    halign: 'right'
                     valign: 'middle'
                 TextInput:
                     id: date_end
                     text: ""
-            LabelledInput:
-                id: job_plants
-                label_text: "Plants:"
-                input_text: ""
-                input_multi_line: True
-                input_read_only: True
-                label_size_hint: root.label_hiont_size, 1                
+            BoxLayout:
+                orientation: "horizontal"
+                padding: 6
                 size_hint: 1, 1
+                spacing: 10
+                Label:
+                    text: "Plants:"
+                    size_hint: 0.28, 1
+                    text_size: self.size        
+                    halign: 'left'
+                    valign: 'middle'
+                TextInput:
+                    id: job_plant_list
+                    text: ""
+                    readonly: True
+                ImageButton:
+                    id: job_plants
+                    size_hint: 0.5, 1
+                    image_path: "../resources/leafadd.png"
+                    lbl_text: "Edit >"
+                    image_pos: "left"
+                    on_press: root.select_plants(root.job_guid)
         BoxLayout:
             orientation: "vertical"
             padding: 10  
@@ -380,45 +593,126 @@
                 image_path: "../resources/play.png"
                 lbl_text: "Resume"
                 image_pos: "top"
-                on_press: root.resume_job()
+                on_press: root.resume_job(root.job_guid)
             ImageButton:
                 image_path: "../resources/pause.png"
                 lbl_text: "Pause"
                 image_pos: "top"
-                on_press: root.pause_job()
+                on_press: root.pause_job(root.job_guid)
             ImageButton:
                 image_path: "../resources/penadd.png"
                 lbl_text: "Save"
                 image_pos: "top"
-                on_press: root.save_job()
+                on_press: root.save_job(root.job_guid)
             ImageButton:
                 image_path: "../resources/penremove.png"
                 lbl_text: "Delete"
                 image_pos: "top"
-                on_press: root.delete_job()
-
-
+                on_press: root.delete_job(root.job_guid)
 
 <JobsLog>:
     name: "log_jobs"
+    log_data: ""
+    log_text: log_text
+    on_pre_enter: self.init_logs()
+    ScrollView:
+        id: scrlv
+        TextInput:
+            id: log_text
+            text: root.log_data
+            multiline: True
+            readonly: False
+            size_hint: 1, None
+            height: max( (len(self._lines)+1) * self.line_height, scrlv.height)
+
+<FileLoader>:
     BoxLayout:
-        orientation: "horizontal"
-        size_hint: 1, 1
+        orientation: "vertical"
+        padding: [10, 0, 10, 0]
+        spacing: 10
+        modal_result: 0
+        file_name: file_name
         Label:
-            text: "Logs"
+            text: "Select Data In file to load"
+            size_hint: 1, 0.1
+        Label:               
+            size_hint: 1, 0.01
+            canvas.before:
+                Color:
+                    rgba: 0.5, 0.8, 0.5, 1
+                Rectangle:
+                    pos: self.pos
+                    size: self.size
+        FileChooserIconView:
+            id: file_chooser
+            filters: ["*.csv"]
+            multiselect: False
+            path: './'
+            on_selection: file_name.text = self.selection and self.selection[0] or ''
+        TextInput:
+            id: file_name
+            size_hint: 1, 0.1
+            text: ""
+            readonly: True
+        BoxLayout:
+            orientation: "horizontal"
+            spacing: 10
+            padding: 10
+            size_hint: 1, 0.3
+            Label:
+                text: ""                
+            ImageButton:
+                id: add_job
+                lbl_text: "OK"
+                image_path: "../resources/catsymbolapprove.png"
+                image_pos: "left"
+                on_press:
+                    root.modal_result = 1
+                    root.dismiss()
+            ImageButton:
+                id: add_job
+                lbl_text: "Cancel"
+                image_path: "../resources/catsymbolremove.png"
+                image_pos: "left"
+                on_press:
+                    root.modal_result = 0
+                    root.dismiss()
 
 <DataIn>:
     name: "data_in"
+    experiments_list: experiments_list
+    on_pre_enter: self.init_experiments()
     BoxLayout:
-        orientation: "horizontal"
-        size_hint: 1, 1
-        Label:
-            text: "Data In"
-
-<DataInEdit>:
-    name: "edit_data_in"
-    BoxLayout:
-        orientation: "horizontal"
-        size_hint: 1, 1
-        Label:
-            text: "Edit data in"
+        orientation: "horizontal"        
+        padding: 10  
+        spacing: 10
+        ImageButton:
+            image_path: "../resources/leafadd.png"
+            lbl_text: "Load data in"
+            image_pos: "top"
+            on_press: root.load_file()        
+        RecycleView:
+            id: experiments_list
+            viewclass: 'SelectableLabel'
+            page: root
+            SelectableRecycleBoxLayout:
+                spacing: 4
+                padding: [0, 10, 0, 10]
+                default_size: None, dp(40)
+                default_size_hint: 1, None
+                size_hint_y: None
+                height: self.minimum_height
+                orientation: 'vertical'
+                multiselect: True
+                touch_multiselect: True
+        BoxLayout:
+            orientation: "vertical"
+            size_hint: 0.4, 1
+            Label:
+                text: ""
+            ImageButton:
+                image_path: "../resources/leafcancel.png"                
+                size_hint: 1, 0.5
+                lbl_text: "Delete"
+                image_pos: "top"
+                on_press: root.remove_experiment()
