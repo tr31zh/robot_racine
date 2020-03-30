@@ -51,7 +51,9 @@ else:
 
 if os.path.isfile(log_file_path):
     with open(log_file_path, "r") as f:
-        log_data = f.readlines()
+        log_data = [
+            line.replace("\n", "") for line in f.readlines() if line != "\n"
+        ]
 else:
     log_data = []
 
@@ -95,12 +97,11 @@ class SelectableLabel(RecycleDataViewBehavior, Label):
     def apply_selection(self, rv, index, is_selected):
         """ Respond to the selection of items in the view. """
         self.selected = is_selected
-        if (
-            self.selected
-            and hasattr(rv, "page")
-            and hasattr(rv.page, "update_data")
-        ):
-            rv.page.update_data(guid=self.guid)
+        if self.selected and hasattr(rv, "page"):
+            if hasattr(rv.page, "update_data"):
+                rv.page.update_data(guid=self.guid)
+            elif hasattr(rv.page, "update_plants"):
+                rv.page.update_plants(experiment=self.text)
 
 
 class MyPageManager(ScreenManager):
@@ -145,7 +146,7 @@ class StartUpPage(Screen):
         if instance.modal_result == 1:
             plant_data.to_csv(plant_data_path, index=False)
             with open(os.path.join(".", "data", "logs.txt"), "w") as f:
-                f.write("\n".join(log_data))
+                f.writelines(log_data)
             with open(os.path.join(".", "data", "jobs_data.json"), "w") as f:
                 json.dump(jobs_data, f, indent=2)
             App.get_running_app().stop()
@@ -153,7 +154,9 @@ class StartUpPage(Screen):
 
     def back(self):
         self.modal_dialog = ModalDialog()
-        self.modal_dialog.modal_dialog_title.text = "Confirmation required"
+        self.modal_dialog.modal_dialog_title.text = self.manager.format_text(
+            text="Confirmation required", is_bold=False, font_size=0
+        )
         self.modal_dialog.modal_dialog_body.text = (
             "Quit program?\nAll jobs will be stopped."
         )
@@ -269,9 +272,12 @@ class JobsManage(MyScreen):
     job_description = ObjectProperty(None)
 
     def init_jobs(self):
+        set_index = not self.jobs_list.data
         self.jobs_list.data = [
             {"text": j["name"], "guid": j["guid"]} for j in jobs_data["jobs"]
         ]
+        if set_index and self.jobs_list.data:
+            self.jobs_list.layout_manager.selected_nodes = [0]
 
     def get_current_description(self):
         return "description"
@@ -305,7 +311,7 @@ class JobsManage(MyScreen):
                 "repetition_value": 6,
                 "repetition_unit": "hours",
                 "timestamp_start": dt.now().strftime("%Y%m%d %H:%M:%S"),
-                "timestamp_end": (dt.now() + td(days=30)).strftime(
+                "timestamp_end": (dt.now() + td(days=14)).strftime(
                     "%Y%m%d %H:%M:%S"
                 ),
                 "plants": "",
@@ -313,6 +319,9 @@ class JobsManage(MyScreen):
         )
         self.init_jobs()
         self.update_data(guid=jobs_data["jobs"][-1]["guid"])
+        self.jobs_list.layout_manager.selected_nodes = [
+            len(jobs_data["jobs"]) - 1
+        ]
 
     def update_data(self, guid):
         job = self.get_job(guid=guid)
@@ -381,13 +390,10 @@ class JobsManage(MyScreen):
 
     def close_plant_selection(self, instance):
         if instance.modal_result == 1:
-            selected_nodes = [
-                instance.ids["selected_plants"].data[i]["text"]
-                for i in instance.ids[
-                    "selected_plants"
-                ].layout_manager.selected_nodes
+            current_plants = [
+                d["text"] for d in instance.ids["selected_plants"].data
             ]
-            instance.job["plants"] = selected_nodes
+            instance.job["plants"] = current_plants
             self.update_data(guid=instance.job["guid"])
         return False
 
@@ -396,7 +402,10 @@ class JobsManage(MyScreen):
         if job is None:
             return
         self.plant_selector = PlantSelector()
-        self.plant_selector.selected_plants_list = job["plants"][:]
+        pl = job["plants"][:]
+        if not pl:
+            pl = []
+        self.plant_selector.selected_plants_list = pl
         self.plant_selector.job = job
         self.plant_selector.update_list_views()
         self.plant_selector.bind(on_dismiss=self.close_plant_selection)
@@ -424,6 +433,7 @@ class DataIn(MyScreen):
     info_text = "View/add/remove Data In files"
 
     experiments_list = ObjectProperty(None)
+    plants_list = ObjectProperty(None)
 
     def init_experiments(self):
         self.experiments_list.data = [
@@ -449,6 +459,17 @@ class DataIn(MyScreen):
         self.file_loader.bind(on_dismiss=self.close_file_selection)
         self.file_loader.open()
 
+    def update_plants(self, experiment):
+        if experiment:
+            self.plants_list.data = [
+                {"text": j}
+                for j in plant_data[
+                    plant_data.experiment == experiment
+                ].plant_name
+            ]
+        else:
+            self.plants_list.data = []
+
     def remove_experiment(self):
         global plant_data
         plant_data = plant_data[
@@ -461,6 +482,8 @@ class DataIn(MyScreen):
                 ]
             )
         ]
+        self.ids["experiments_list"].layout_manager.selected_nodes = []
+        self.plants_list.data = []
         self.init_experiments()
 
 

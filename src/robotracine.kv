@@ -7,10 +7,11 @@
     lbl_status: lbl_status
     page_manager: page_manager
     orientation: "vertical"
+    sep_size: 0.02
     BoxLayout:
         orientation: "horizontal"        
         padding: 10
-        size_hint: 1, 0.2
+        size_hint: 1, 0.18
         Label:
             id: lbl_title
             size_hint: 0.4, 1
@@ -22,13 +23,35 @@
         Label:
             id: lbl_info
             text: "Welcome to RobotRacine control center"
-            size_hint: 1, 1
+            size_hint: 1, 1    
+    BoxLayout:
+        orientation: "horizontal"        
+        padding: 2
+        size_hint: 1, root.sep_size
+        Label:               
+            canvas.before:
+                Color:
+                    rgba: 0.5, 0.8, 0.5, 1
+                Rectangle:
+                    pos: self.pos
+                    size: self.size
     MyPageManager:
         id: page_manager
         lbl_title: lbl_title
         lbl_info: lbl_info
         bt_back: bt_back
-        lbl_status: lbl_status
+        lbl_status: lbl_status        
+    BoxLayout:
+        orientation: "horizontal"        
+        padding: 2
+        size_hint: 1, root.sep_size
+        Label:               
+            canvas.before:
+                Color:
+                    rgba: 0.5, 0.8, 0.5, 1
+                Rectangle:
+                    pos: self.pos
+                    size: self.size
     BoxLayout:
         orientation: "horizontal"
         padding: 10
@@ -146,12 +169,12 @@
         padding: 10
         Label:
             id: modal_dialog_title
-            text: "[b]Modal dialog title[/b]"
-            markdown:True            
+            size_hint: 1, 0.2
+            markdown:True
             text_size: self.size
             halign: 'left'
             valign: 'middle'
-            size_hint: 1, 0.2
+            text: "Modal dialog title"
         Label:               
             size_hint: 1, 0.02
             canvas.before:
@@ -681,38 +704,77 @@
 <DataIn>:
     name: "data_in"
     experiments_list: experiments_list
+    plants_list: plants_list
     on_pre_enter: self.init_experiments()
     BoxLayout:
         orientation: "horizontal"        
         padding: 10  
         spacing: 10
-        ImageButton:
-            image_path: "../resources/leafadd.png"
-            lbl_text: "Load data in"
-            image_pos: "top"
-            on_press: root.load_file()        
-        RecycleView:
-            id: experiments_list
-            viewclass: 'SelectableLabel'
-            page: root
-            SelectableRecycleBoxLayout:
-                spacing: 4
-                padding: [0, 10, 0, 10]
-                default_size: None, dp(40)
-                default_size_hint: 1, None
-                size_hint_y: None
-                height: self.minimum_height
-                orientation: 'vertical'
-                multiselect: True
-                touch_multiselect: True
         BoxLayout:
             orientation: "vertical"
-            size_hint: 0.4, 1
-            Label:
-                text: ""
+            size_hint: 0.6, 1
+            ImageButton:
+                image_path: "../resources/leafadd.png"
+                lbl_text: "Load data in"
+                image_pos: "top"
+                on_press: root.load_file()        
             ImageButton:
                 image_path: "../resources/leafcancel.png"                
-                size_hint: 1, 0.5
-                lbl_text: "Delete"
+                lbl_text: "Delete data in"
                 image_pos: "top"
                 on_press: root.remove_experiment()
+        BoxLayout:
+            orientation: "vertical"
+            Label:
+                text: "[b]Experiments:[/b]"
+                markup: True
+                size_hint: 1, 0.15
+            Label:               
+                size_hint: 1, 0.015
+                canvas.before:
+                    Color:
+                        rgba: 0.5, 0.8, 0.5, 1
+                    Rectangle:
+                        pos: self.pos
+                        size: self.size
+            RecycleView:
+                id: experiments_list
+                viewclass: 'SelectableLabel'
+                page: root
+                SelectableRecycleBoxLayout:
+                    spacing: 4
+                    padding: [0, 10, 0, 10]
+                    default_size: None, dp(40)
+                    default_size_hint: 1, None
+                    size_hint_y: None
+                    height: self.minimum_height
+                    orientation: 'vertical'
+                    multiselect: False
+                    touch_multiselect: False
+        BoxLayout:
+            orientation: "vertical"
+            Label:
+                text: "[b]Plants:[/b]"
+                markup: True
+                size_hint: 1, 0.15
+            Label:               
+                size_hint: 1, 0.015
+                canvas.before:
+                    Color:
+                        rgba: 0.5, 0.8, 0.5, 1
+                    Rectangle:
+                        pos: self.pos
+                        size: self.size
+            RecycleView:
+                id: plants_list
+                viewclass: 'SelectableLabel'
+                SelectableRecycleBoxLayout:
+                    spacing: 4
+                    padding: [0, 10, 0, 10]
+                    default_size: None, dp(40)
+                    default_size_hint: 1, None
+                    size_hint_y: None
+                    height: self.minimum_height
+                    orientation: 'vertical'
+                    multiselect: False
+                    touch_multiselect: False
