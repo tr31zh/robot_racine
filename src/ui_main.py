@@ -16,7 +16,7 @@ if not os.path.exists(log_folder):
 log_path = os.path.join(log_folder, f"{dt.now().strftime('%Y%m%d %H%M%S')}.log")
 logging.basicConfig(
     level=logging.INFO,
-    format="[%(asctime)s - %(mem_data)s - %(name)s - %(levelname)s] - %(message)s",
+    format="[%(asctime)s - %(name)s - %(levelname)s] - %(message)s",
     handlers=[
         logging.FileHandler(
             log_path,
