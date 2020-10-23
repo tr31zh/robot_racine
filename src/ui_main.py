@@ -1,11 +1,35 @@
 import os
+import logging
 from datetime import datetime as dt
 from datetime import timedelta as td
+
+
+log_folder = os.path.join(
+    os.path.dirname(__file__),
+    "..",
+    "data",
+    "logs",
+    "",
+)
+if not os.path.exists(log_folder):
+    os.mkdir(log_folder)
+log_path = os.path.join(log_folder, f"{dt.now().strftime('%Y%m%d %H%M%S')}.log")
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(asctime)s - %(mem_data)s - %(name)s - %(levelname)s] - %(message)s",
+    handlers=[
+        logging.FileHandler(
+            log_path,
+            mode="a",
+            delay=True,
+        )
+    ],
+)
+
 from uuid import uuid4
-import json
+from functools import partial
 
 import pandas as pd
-import numpy as np
 
 from kivy.app import App
 from kivy.uix.screenmanager import ScreenManager, Screen
@@ -18,44 +42,19 @@ from kivy.uix.recycleboxlayout import RecycleBoxLayout
 from kivy.uix.recycleview.views import RecycleDataViewBehavior
 from kivy.uix.label import Label
 from kivy.uix.modalview import ModalView
-from kivy.uix.filechooser import FileChooserListView
+from kivy.clock import Clock
 
-import drive as drive
+from drive import Controller, JobData
+
+
+controller: Controller = Controller()
 
 Config.set("graphics", "width", "800")
 Config.set("graphics", "height", "480")
 Config.set("graphics", "borderless", "1")
 
-TEST_MODE = True
 
-plant_data_path = os.path.join(".", "data", "plants_data.csv")
-if TEST_MODE:
-    jobs_file_path = os.path.join(".", "test_files", "test_jobs.json")
-    log_file_path = os.path.join(".", "test_files", "test_logs.txt")
-else:
-    jobs_file_path = os.path.join(".", "data", "jobs_data.json")
-    log_file_path = os.path.join(".", "data", "logs.txt")
-
-if os.path.isfile(plant_data_path):
-    plant_data = pd.read_csv(plant_data_path)
-else:
-    plant_data = pd.DataFrame(
-        columns=["experiment", "plant_name", "position", "allow_capture"]
-    )
-
-if os.path.isfile(jobs_file_path):
-    with open(jobs_file_path, "r") as f:
-        jobs_data = json.load(f)
-else:
-    jobs_data = {"jobs": []}
-
-if os.path.isfile(log_file_path):
-    with open(log_file_path, "r") as f:
-        log_data = [
-            line.replace("\n", "") for line in f.readlines() if line != "\n"
-        ]
-else:
-    log_data = []
+logger = logging.getLogger("ui")
 
 
 class RootWidget(BoxLayout):
@@ -69,7 +68,9 @@ class ModalDialog(ModalView):
 
 
 class SelectableRecycleBoxLayout(
-    FocusBehavior, LayoutSelectionBehavior, RecycleBoxLayout
+    FocusBehavior,
+    LayoutSelectionBehavior,
+    RecycleBoxLayout,
 ):
     """ Adds selection and focus behavior to the view. """
 
@@ -109,16 +110,28 @@ class MyPageManager(ScreenManager):
     lbl_title = ObjectProperty(None)
     lbl_info = ObjectProperty(None)
     lbl_status = ObjectProperty(None)
+    event = None
+
+    def __init__(self, **kwargs):
+        super(MyPageManager, self).__init__(**kwargs)
+        self.countdown_event = Clock.schedule_interval(
+            self.update_countdown,
+            0.1,
+        )
 
     def on_back(self):
         self.current_screen.back()
 
+    def on_stop(self):
+        controller.send_command(
+            command="stop",
+            callback=self.update_status,
+        )
+
     def back_text(self):
         return self.current_screen.back_text
 
-    def format_text(
-        self, text: str, is_bold: bool = False, font_size: int = 0
-    ):
+    def format_text(self, text: str, is_bold: bool = False, font_size: int = 0):
         prefix = "[b]" if is_bold else ""
         prefix += f"[size={font_size}]" if font_size > 0 else ""
         suffix = "[/b]" if is_bold else ""
@@ -135,6 +148,73 @@ class MyPageManager(ScreenManager):
         self.lbl_info.text = self.current_screen.info_text
         self.lbl_status.text = ""
 
+    def update_status(
+        self,
+        message: str,
+        wipe_after: float,
+        reset_event: bool = True,
+        log_level: int = logging.INFO,
+    ):
+        self.lbl_status.text = message
+        if self.event is not None and reset_event:
+            self.event.cancel()
+            self.event = None
+        if wipe_after > 0:
+            self.event = Clock.schedule_interval(
+                partial(self.delayed_update_status, ""),
+                wipe_after,
+            )
+        if log_level == logging.DEBUG:
+            logger.debug(message)
+        elif log_level == logging.INFO:
+            logger.info(message)
+        elif log_level == logging.WARNING:
+            logger.warning(message)
+        elif log_level == logging.ERROR:
+            logger.error(message)
+        elif log_level == logging.CRITICAL:
+            logger.critical(message)
+        else:
+            logger.info(message)
+
+    def delayed_update_status(self, message, dt):
+        self.lbl_status.text = message
+        return False
+
+    def update_countdown(self, delta):
+        if controller.job_in_progress is not None:
+            self.lbl_info.text = self.lbl_info.text = self.format_text(
+                f"Job {controller.job_in_progress.name} in progress",
+                is_bold=True,
+                font_size=20,
+            )
+        else:
+            next_job = controller.get_next_job()
+            if next_job:
+                count_down_text = ""
+                td_next = next_job.next_time_point - dt.now()
+                if td_next.days < 1 and td_next.seconds < 11:
+                    if td_next.seconds > 0.5:
+                        self.lbl_info.text = self.format_text(
+                            f"Next job {next_job.name} WILL start in {td_next.seconds}{'  ' * round(td_next.seconds)} >",
+                            is_bold=True,
+                            font_size=20,
+                        )
+                    else:
+                        controller.execute_job(next_job, self.update_status)
+                else:
+                    count_down_text += f"{td_next.days} days "
+                    hours, remainder = divmod(td_next.seconds, 3600)
+                    minutes, seconds = divmod(remainder, 60)
+                    count_down_text += f"{hours} hours "
+                    count_down_text += f"{minutes} minutes "
+                    count_down_text += f"and {seconds} seconds"
+                    self.lbl_info.text = f"Next job {next_job.name} starts in {count_down_text}"
+            else:
+                self.lbl_info.text = "No job in schedule"
+
+        return True
+
 
 class StartUpPage(Screen):
     back_text = "< Exit"
@@ -144,11 +224,11 @@ class StartUpPage(Screen):
 
     def dialog_callback(self, instance):
         if instance.modal_result == 1:
-            plant_data.to_csv(plant_data_path, index=False)
-            with open(os.path.join(".", "data", "logs.txt"), "w") as f:
-                f.writelines(log_data)
-            with open(os.path.join(".", "data", "jobs_data.json"), "w") as f:
-                json.dump(jobs_data, f, indent=2)
+            controller.send_command(
+                command="stop",
+                callback=self.manager.update_status,
+            )
+            controller.save()
             App.get_running_app().stop()
         return False
 
@@ -157,9 +237,7 @@ class StartUpPage(Screen):
         self.modal_dialog.modal_dialog_title.text = self.manager.format_text(
             text="Confirmation required", is_bold=False, font_size=0
         )
-        self.modal_dialog.modal_dialog_body.text = (
-            "Quit program?\nAll jobs will be stopped."
-        )
+        self.modal_dialog.modal_dialog_body.text = "Quit program?\nAll jobs will be stopped."
         self.modal_dialog.bind(on_dismiss=self.dialog_callback)
         self.modal_dialog.open()
 
@@ -167,7 +245,8 @@ class StartUpPage(Screen):
 class MyScreen(Screen):
     def back(self):
         self.manager.set_active_page(
-            new_page_name=self.back_target, direction="right"
+            new_page_name=self.back_target,
+            direction="right",
         )
 
 
@@ -178,34 +257,40 @@ class ManualRoot(MyScreen):
     info_text = "Take control of the robot"
 
     def go_home(self):
-        self.manager.lbl_status.text = "Going Home"
-        drive.go_home()
-        self.manager.lbl_status.text = "Went Home"
-
-    def run(self):
-        self.manager.lbl_status.text = "Engine On"
-        drive.run()
+        controller.send_command(
+            command="go_home",
+            callback=self.manager.update_status,
+        )
 
     def go_next(self):
-        self.manager.lbl_status.text = "Setting next plant"
-        drive.go_next()
-        self.manager.lbl_status.text = "Next plant set"
+        controller.send_command(
+            command="go_next",
+            callback=self.manager.update_status,
+        )
 
     def stop(self):
-        drive.stop()
-        self.manager.lbl_status.text = "Engine stopped"
+        controller.send_command(
+            command="stop",
+            callback=self.manager.update_status,
+        )
+
+    def start(self):
+        controller.send_command(
+            command="start",
+            callback=self.manager.update_status,
+        )
 
 
 class ManualCapture(MyScreen):
     back_text = "< Back"
-    back_target = "manual_root"
+    back_target = "start_up"
     title_text = "Manual Capture"
     info_text = "Set the camera and take snapshots"
 
     bt_back = ObjectProperty(None)
 
     def snap(self):
-        self.manager.lbl_status.text = "Oh, snap"
+        controller.snap(callback=self.manager.update_status)
 
 
 class Jobs(MyScreen):
@@ -227,25 +312,18 @@ class PlantSelector(ModalView):
             {"text": j}
             for j in [
                 plant
-                for plant in plant_data.plant_name.unique()
+                for plant in controller.plant_data.plant_name.unique()
                 if plant not in self.selected_plants_list
             ]
         ]
-        self.ids["selected_plants"].data = [
-            {"text": j} for j in self.selected_plants_list
-        ]
+        self.ids["selected_plants"].data = [{"text": j} for j in self.selected_plants_list]
 
     def add_to_selection(self):
-        selected_nodes = self.ids[
-            "available_plants"
-        ].layout_manager.selected_nodes
+        selected_nodes = self.ids["available_plants"].layout_manager.selected_nodes
         self.ids["available_plants"].layout_manager.selected_nodes = []
         if selected_nodes:
             self.selected_plants_list.extend(
-                [
-                    self.ids["available_plants"].data[i]["text"]
-                    for i in selected_nodes
-                ]
+                [self.ids["available_plants"].data[i]["text"] for i in selected_nodes]
             )
             self.update_list_views()
 
@@ -264,7 +342,7 @@ class PlantSelector(ModalView):
 
 class JobsManage(MyScreen):
     back_text = "< Back"
-    back_target = "jobs"
+    back_target = "start_up"
     title_text = "Manage jobs"
     info_text = "About the jobs..."
     jobs_list = "Take a snapshot"
@@ -273,9 +351,7 @@ class JobsManage(MyScreen):
 
     def init_jobs(self):
         set_index = not self.jobs_list.data
-        self.jobs_list.data = [
-            {"text": j["name"], "guid": j["guid"]} for j in jobs_data["jobs"]
-        ]
+        self.jobs_list.data = [{"text": j.name, "guid": j.guid} for j in controller.jobs_data]
         if set_index and self.jobs_list.data:
             self.jobs_list.layout_manager.selected_nodes = [0]
 
@@ -283,118 +359,116 @@ class JobsManage(MyScreen):
         return "description"
 
     def get_job(self, guid):
-        for job in jobs_data["jobs"]:
-            if job["guid"] == guid:
+        for job in controller.jobs_data:
+            if job.guid == guid:
                 return job
         else:
             return None
 
     def get_job_index(self, guid):
-        for i, job in enumerate(jobs_data["jobs"]):
-            if job["guid"] == guid:
+        for i, job in enumerate(controller.jobs_data):
+            if job.guid == guid:
                 return i
         else:
             return -1
 
     def new_job(self):
-        if not jobs_data:
-            jobs_data["jobs"] = []
-        jobs_data["jobs"].append(
-            {
-                "name": "Job " + dt.now().strftime("%Y%m%d %H:%M:%S"),
-                "state": "active",
-                "guid": str(uuid4()),
-                "description": "",
-                "owner": "",
-                "mail_to": "",
-                "repetition_mode": "every",
-                "repetition_value": 6,
-                "repetition_unit": "hours",
-                "timestamp_start": dt.now().strftime("%Y%m%d %H:%M:%S"),
-                "timestamp_end": (dt.now() + td(days=14)).strftime(
-                    "%Y%m%d %H:%M:%S"
-                ),
-                "plants": "",
-            }
+        controller.jobs_data.append(
+            JobData(
+                **{
+                    "name": "Job " + dt.now().strftime("%Y%m%d %H:%M:%S"),
+                    "state": "active",
+                    "guid": str(uuid4()),
+                    "description": "",
+                    "owner": "",
+                    "mail_to": "",
+                    "repetition_mode": "every",
+                    "repetition_value": 6,
+                    "timestamp_start": dt.now(),
+                    "timestamp_end": dt.now() + td(days=14),
+                    "plants": "",
+                }
+            )
         )
         self.init_jobs()
-        self.update_data(guid=jobs_data["jobs"][-1]["guid"])
-        self.jobs_list.layout_manager.selected_nodes = [
-            len(jobs_data["jobs"]) - 1
-        ]
+        self.update_data(guid=controller.jobs_data[-1].guid)
+        self.jobs_list.layout_manager.selected_nodes = [len(controller.jobs_data) - 1]
 
     def update_data(self, guid):
         job = self.get_job(guid=guid)
         if job is None:
             return
-        self.job_name.input_text = job["name"]
+        self.job_name.input_text = job.name
         self.job_guid = guid
-        self.job_state.text = "" if job["state"] == "active" else "paused"
-        self.job_description.input_text = job["description"]
-        self.job_owner.input_text = job["owner"]
-        self.job_mail_list.input_text = "; ".join(job["mail_to"])
-        self.time_mode.text = job["repetition_mode"]
-        self.time_value.text = str(job["repetition_value"])
-        self.time_unit.text = job["repetition_unit"]
-        self.date_start.text = job["timestamp_start"]
-        self.date_end.text = job["timestamp_end"]
-        self.job_plant_list.text = ";".join(job["plants"])
+        self.job_description.input_text = job.description
+        self.job_owner.input_text = job.owner
+        self.job_mail_list.input_text = "; ".join(job.mail_to)
+        self.time_mode.text = job.repetition_mode
+        self.time_value.text = str(job.repetition_value)
+        self.date_start.text = job.timestamp_start.strftime("%Y/%m/%d %H:%M:%S")
+        self.date_end.text = job.timestamp_end.strftime("%Y/%m/%d %H:%M:%S")
+        self.job_plant_list.text = ";".join(job.plants)
+
+        if job.state == "active":
+            self.state_image_button.image_path = "../resources/active.png"
+            self.state_image_button.lbl_text = "active"
+        else:
+            self.state_image_button.image_path = "../resources/paused.png"
+            self.state_image_button.lbl_text = "paused"
 
     def save_job(self, guid):
         index = self.get_job_index(guid=guid)
         if index < 0:
             return
-        jobs_data["jobs"][index]["name"] = self.job_name.text_holder.text
-        jobs_data["jobs"][index]["state"] = (
-            "paused" if self.job_state.text == "paused" else "active"
+        controller.jobs_data[index].name = self.job_name.text_holder.text
+        controller.jobs_data[index].state = (
+            "paused" if self.state_image_button.lbl_text == "paused" else "active"
         )
-        jobs_data["jobs"][index][
-            "description"
-        ] = self.job_description.text_holder.text
-        jobs_data["jobs"][index]["owner"] = self.job_owner.text_holder.text
-        jobs_data["jobs"][index][
-            "mail_to"
-        ] = self.job_mail_list.text_holder.text.replace(" ", "").split(";")
-        jobs_data["jobs"][index]["repetition_mode"] = self.time_mode.text
+        controller.jobs_data[index]["description"] = self.job_description.text_holder.text
+        controller.jobs_data[index].owner = self.job_owner.text_holder.text
+        controller.jobs_data[index].mail_to = self.job_mail_list.text_holder.text.replace(
+            " ", ""
+        ).split(";")
+        controller.jobs_data[index].repetition_mode = self.time_mode.text
         try:
-            jobs_data["jobs"][index]["repetition_value"] = int(
-                self.time_value.text
-            )
+            controller.jobs_data[index].repetition_value = int(self.time_value.text)
         except:
-            jobs_data["jobs"][index]["repetition_value"] = 0
-        jobs_data["jobs"][index]["repetition_unit"] = self.time_unit.text
-        jobs_data["jobs"][index]["timestamp_start"] = self.date_start.text
-        jobs_data["jobs"][index]["timestamp_end"] = self.date_end.text
+            controller.jobs_data[index].repetition_value = 0
+        controller.jobs_data[index].timestamp_start = self.date_start.text
+        controller.jobs_data[index].timestamp_end = self.date_end.text
 
-    def resume_job(self, guid):
+    def toggle_job_state(self, guid):
         job = self.get_job(guid=guid)
         if job is None:
             return
-        job["state"] = "active"
+        if job.state == "active":
+            self.state_image_button.image_path = "../resources/paused.png"
+            job.state = "paused"
+        else:
+            self.state_image_button.image_path = "../resources/active.png"
+            job.state = "active"
+        self.state_image_button.lbl_text = job.state
         self.update_data(guid=guid)
 
-    def pause_job(self, guid):
+    def start_job(self, guid):
         job = self.get_job(guid=guid)
         if job is None:
             return
-        job["state"] = "paused"
-        self.update_data(guid=guid)
+        controller.execute_job(job, self.manager.update_status)
 
     def delete_job(self, guid):
         index = self.get_job_index(guid=guid)
         if index < 0:
             return
-        jobs_data["jobs"].pop(index)
+        controller.jobs_data.pop(index)
         self.init_jobs()
-        self.update_data(guid=jobs_data["jobs"][-1]["guid"])
+        self.update_data(guid=controller.jobs_data[-1].guid)
 
     def close_plant_selection(self, instance):
         if instance.modal_result == 1:
-            current_plants = [
-                d["text"] for d in instance.ids["selected_plants"].data
-            ]
+            current_plants = [d["text"] for d in instance.ids["selected_plants"].data]
             instance.job["plants"] = current_plants
-            self.update_data(guid=instance.job["guid"])
+            self.update_data(guid=instance.job.guid)
         return False
 
     def select_plants(self, guid):
@@ -402,7 +476,7 @@ class JobsManage(MyScreen):
         if job is None:
             return
         self.plant_selector = PlantSelector()
-        pl = job["plants"][:]
+        pl = job.plants[:]
         if not pl:
             pl = []
         self.plant_selector.selected_plants_list = pl
@@ -414,12 +488,15 @@ class JobsManage(MyScreen):
 
 class JobsLog(MyScreen):
     back_text = "< Back"
-    back_target = "jobs"
-    title_text = "Jobs log"
+    back_target = "start_up"
+    title_text = "Logs"
     info_text = "Logs, logs everywhere"
 
     def init_logs(self):
-        self.log_text.text = "\n".join(reversed(log_data))
+        with open(log_path, "r") as f:
+            self.log_text.text = "\n".join(
+                reversed([line.replace("\n", "") for line in f.readlines() if line != "\n"])
+            )
 
 
 class FileLoader(ModalView):
@@ -437,7 +514,7 @@ class DataIn(MyScreen):
 
     def init_experiments(self):
         self.experiments_list.data = [
-            {"text": j} for j in plant_data.experiment.unique()
+            {"text": j} for j in controller.plant_data.experiment.unique()
         ]
 
     def close_file_selection(self, instance):
@@ -445,12 +522,11 @@ class DataIn(MyScreen):
             try:
                 new_df = pd.read_csv(instance.ids["file_name"].text)
             except Exception as e:
-                log_data.append(
-                    f"{dt.now().strftime('%Y%m%d %H:%M:%S')} - Failed to load data in because {repr(e)}"
-                )
+                logger.error(f"Failed to load data in because {repr(e)}")
             else:
-                global plant_data
-                plant_data = pd.concat((plant_data, new_df)).drop_duplicates()
+                controller.plant_data = pd.concat(
+                    (controller.plant_data, new_df)
+                ).drop_duplicates()
                 self.init_experiments()
         return False
 
@@ -463,28 +539,47 @@ class DataIn(MyScreen):
         if experiment:
             self.plants_list.data = [
                 {"text": j}
-                for j in plant_data[
-                    plant_data.experiment == experiment
+                for j in controller.plant_data[
+                    controller.plant_data.experiment == experiment
                 ].plant_name
             ]
         else:
             self.plants_list.data = []
 
     def remove_experiment(self):
-        global plant_data
-        plant_data = plant_data[
-            ~plant_data.experiment.isin(
+        controller.plant_data = controller.plant_data[
+            ~controller.plant_data.experiment.isin(
                 [
                     self.ids["experiments_list"].data[i]["text"]
-                    for i in self.ids[
-                        "experiments_list"
-                    ].layout_manager.selected_nodes
+                    for i in self.ids["experiments_list"].layout_manager.selected_nodes
                 ]
             )
         ]
         self.ids["experiments_list"].layout_manager.selected_nodes = []
         self.plants_list.data = []
         self.init_experiments()
+
+
+class SettingsPage(MyScreen):
+    back_text = "< Back"
+    back_target = "start_up"
+    title_text = "Settings"
+    info_text = "Manage Robot Racine"
+
+    def init_settings(self):
+        self.target_ip.text = controller.settings["target_ip"]
+        self.target_port.text = str(controller.settings["target_port"])
+        self.tray_count.text = str(controller.settings["tray_count"])
+
+    def save_settings(self):
+        try:
+            controller.settings["target_ip"] = self.target_ip.text
+            controller.settings["target_port"] = int(self.target_port.text)
+            controller.settings["tray_count"] = self.tray_count.text
+        except Exception as e:
+            logger.error(f"Failed to save settings because: {repr(e)}")
+        else:
+            controller.save_settings()
 
 
 class RobotRacineApp(App):
@@ -495,5 +590,7 @@ class RobotRacineApp(App):
 
 
 if __name__ == "__main__":
+    logger.info("Starting Robot Racine UI")
+    logger.info("________________________")
     rr_app = RobotRacineApp()
     rr_app.run()

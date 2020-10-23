@@ -1,4 +1,5 @@
 experiment,plant_name,position,allow_capture
+rr_test_1_2003,test_1_plant_0,0,True
 rr_test_1_2003,test_1_plant_1,1,False
 rr_test_1_2003,test_1_plant_2,2,True
 rr_test_1_2003,test_1_plant_3,3,False

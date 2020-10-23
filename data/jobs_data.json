@@ -232,29 +232,6 @@
       "repetition_value": 15,
       "timestamp_start": "2020/04/03 15:00:48",
       "timestamp_end": "2020/04/09 17:05:28"
-    },
-    {
-      "name": "Test job",
-      "state": "active",
-      "guid": "ef35efb2-b8c3-4261-b780-28ba9a29bf8c",
-      "description": "Description du job",
-      "owner": "Moi",
-      "mail_to": [
-        "moi@me.yo",
-        "toi@you.tu"
-      ],
-      "repetition_mode": "every",
-      "repetition_value": 6,
-      "repetition_unit": "hours",
-      "timestamp_start": "20200330 15:33:21",
-      "timestamp_end": "20200413 15:33:21",
-      "plants": [
-        "test_2_plant_1",
-        "test_2_plant_2",
-        "test_2_plant_3",
-        "test_2_plant_5",
-        "test_2_plant_7"
-      ]
     }
   ]
 }
