@@ -69,7 +69,7 @@ def job_state_to_text(state):
 class JobData:
     def __init__(self, **kwargs) -> None:
         self.name = kwargs.get("name")
-        self.state = kwargs.get("state")
+        self.enabled = kwargs.get("enabled")
         self.guid = kwargs.get("guid")
         self.description = kwargs.get("description")
         self.owner = kwargs.get("owner")
@@ -82,12 +82,12 @@ class JobData:
         self.time_points = []
         self.update_time_points()
 
-        self.job_state = JobState.INACTIVE
+        self.state = JobState.INACTIVE
 
     def to_json(self):
         return {
             "name": self.name,
-            "state": self.state,
+            "enabled": self.enabled,
             "guid": self.guid,
             "description": self.description,
             "owner": self.owner,
@@ -125,7 +125,7 @@ class JobData:
 
     @property
     def next_time_point(self):
-        if self.state == "active":
+        if self.enabled is True:
             n = dt.now()
             l = [t for t in self.time_points if t >= n]
             return l[0] if l else None
@@ -267,7 +267,7 @@ class Controller:
             [
                 j
                 for j in self.jobs_data
-                if j.state == "active" and j.timestamp_start <= n <= j.timestamp_end
+                if j.enabled is True and j.timestamp_start <= n <= j.timestamp_end
             ],
             key=lambda x: x.next_time_point,
         )
@@ -277,7 +277,8 @@ class Controller:
         if self.job_in_progress is None:
             msg = ""
         else:
-            msg = f"{self.job_in_progress.name} {job_state_to_text(self.job_in_progress.job_state)} - "
+            state_text = job_state_to_text(self.job_in_progress.state)
+            msg = f"{self.job_in_progress.name} {state_text} - "
         if self.robot_state["home"] == True:
             msg += "Home position"
         elif self.robot_state["current_state"] >= 0:
@@ -308,20 +309,21 @@ class Controller:
 
         if self.job_in_progress is not None:
             if received_command == "go_home":
-                if self.job_in_progress.job_state == JobState.WAITING_HOME:
-                    self.job_in_progress.job_state = JobState.IN_PROGRESS
+                if self.job_in_progress.state == JobState.WAITING_HOME:
+                    self.job_in_progress.state = JobState.IN_PROGRESS
                     self.callback(
                         message=f"Job {self.job_in_progress.name} - Home position reached",
                         wipe_after=-1,
                         log_level=logging.INFO,
                     )
-                elif self.job_in_progress.job_state == JobState.IN_PROGRESS:
-                    self.job_in_progress.job_state = JobState.INACTIVE
+                elif self.job_in_progress.state == JobState.IN_PROGRESS:
+                    self.job_in_progress.state = JobState.INACTIVE
                     self.callback(
                         message=f"Job {self.job_in_progress.name} - Ended",
                         wipe_after=5,
                         log_level=logging.INFO,
                     )
+                    self.job_in_progress = None
             elif received_command == "go_next":
                 plant = self.get_current_plant()
                 if plant is None:
@@ -345,7 +347,7 @@ class Controller:
                         log_level=logging.INFO,
                     )
             elif received_command == "stop":
-                self.job_in_progress.job_state = JobState.INACTIVE
+                self.job_in_progress.state = JobState.INACTIVE
                 self.callback(
                     message=f"Job {self.job_in_progress.name} - Cancelled",
                     wipe_after=5,
@@ -466,14 +468,14 @@ class Controller:
             )
 
     def execute_job(self, job: JobData, callback):
-        if job.state == "active":
+        if job.enabled is True:
             callback(
                 f"Starting Job {job.name}",
                 wipe_after=-1,
                 log_level=logging.INFO,
             )
             self.job_in_progress = job
-            self.job_in_progress.job_state = JobState.WAITING_HOME
+            self.job_in_progress.state = JobState.WAITING_HOME
             self.send_command(
                 command="go_home",
                 callback=callback,

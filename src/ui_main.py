@@ -44,7 +44,7 @@ from kivy.uix.label import Label
 from kivy.uix.modalview import ModalView
 from kivy.clock import Clock
 
-from drive import Controller, JobData
+from drive import Controller, JobData, JobState
 
 
 controller: Controller = Controller()
@@ -183,12 +183,29 @@ class MyPageManager(ScreenManager):
 
     def update_countdown(self, delta):
         if controller.job_in_progress is not None:
+            jib = controller.job_in_progress
+            if jib.state == JobState.WAITING_HOME:
+                js = "waiting home position"
+                self.pg_global.value = 0
+            elif jib.state == JobState.IN_PROGRESS:
+                idx = max(
+                    controller.robot_state["current_state"],
+                    controller.robot_state["last_state"],
+                )
+                self.pg_global.value = idx / controller.settings["tray_count"]
+                js = f"in progress {idx}/{controller.settings['tray_count']}"
+            elif jib.state == JobState.INACTIVE:
+                js = "ended"
+                self.pg_global.value = 0
+            else:
+                js = "unknown"
             self.lbl_info.text = self.lbl_info.text = self.format_text(
-                f"Job {controller.job_in_progress.name} in progress",
+                f"Job {controller.job_in_progress.name} {js}",
                 is_bold=True,
                 font_size=20,
             )
         else:
+            self.pg_global.value = 0
             next_job = controller.get_next_job()
             if next_job:
                 count_down_text = ""
@@ -377,7 +394,7 @@ class JobsManage(MyScreen):
             JobData(
                 **{
                     "name": "Job " + dt.now().strftime("%Y%m%d %H:%M:%S"),
-                    "state": "active",
+                    "enabled": True,
                     "guid": str(uuid4()),
                     "description": "",
                     "owner": "",
@@ -409,7 +426,7 @@ class JobsManage(MyScreen):
         self.date_end.text = job.timestamp_end.strftime("%Y/%m/%d %H:%M:%S")
         self.job_plant_list.text = ";".join(job.plants)
 
-        if job.state == "active":
+        if job.enabled is True:
             self.state_image_button.image_path = "../resources/active.png"
             self.state_image_button.lbl_text = "active"
         else:
@@ -421,9 +438,7 @@ class JobsManage(MyScreen):
         if index < 0:
             return
         controller.jobs_data[index].name = self.job_name.text_holder.text
-        controller.jobs_data[index].state = (
-            "paused" if self.state_image_button.lbl_text == "paused" else "active"
-        )
+        controller.jobs_data[index].enabled = self.state_image_button.lbl_text == "active"
         controller.jobs_data[index]["description"] = self.job_description.text_holder.text
         controller.jobs_data[index].owner = self.job_owner.text_holder.text
         controller.jobs_data[index].mail_to = self.job_mail_list.text_holder.text.replace(
@@ -441,13 +456,14 @@ class JobsManage(MyScreen):
         job = self.get_job(guid=guid)
         if job is None:
             return
-        if job.state == "active":
+        if job.enabled is True:
             self.state_image_button.image_path = "../resources/paused.png"
-            job.state = "paused"
+            job.enabled = False
+            self.state_image_button.lbl_text = "paused"
         else:
             self.state_image_button.image_path = "../resources/active.png"
-            job.state = "active"
-        self.state_image_button.lbl_text = job.state
+            job.enabled = True
+            self.state_image_button.lbl_text = "Enabled"
         self.update_data(guid=guid)
 
     def start_job(self, guid):

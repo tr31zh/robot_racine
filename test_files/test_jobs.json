@@ -2,7 +2,7 @@
   "jobs": [
     {
       "name": "Job 1",
-      "state": "active",
+      "enabled": true,
       "guid": "6c9a2be0-2009-4445-9166-a03422927343",
       "description": "Job executed with all plants from test experiment 1",
       "owner": "no one",
@@ -45,12 +45,12 @@
       ],
       "repetition_mode": "every",
       "repetition_value": 1,
-      "timestamp_start": "2020/10/23 16:02:42",
-      "timestamp_end": "2020/11/05 17:05:28"
+      "timestamp_start": "2020/11/03 11:28:34",
+      "timestamp_end": "2021/11/05 17:05:28"
     },
     {
       "name": "Job 2",
-      "state": "paused",
+      "enabled": false,
       "guid": "cdb774a5-2701-440f-a953-10381a25267f",
       "description": "Job executed with all plants from test experiment 2",
       "owner": "two one",
@@ -82,11 +82,11 @@
       "repetition_mode": "at",
       "repetition_value": "8, 12, 14",
       "timestamp_start": "2020/03/26 17:05:28",
-      "timestamp_end": "2020/06/04 17:05:28"
+      "timestamp_end": "2021/06/04 17:05:28"
     },
     {
       "name": "Job 3",
-      "state": "active",
+      "enabled": true,
       "guid": "4084727c-ce6c-46a1-9574-e2da74d32d14",
       "description": "Job executed with all plants from test experiment 3",
       "owner": "some one",
@@ -120,11 +120,11 @@
       "repetition_mode": "every",
       "repetition_value": 1,
       "timestamp_start": "2020/03/26 17:05:28",
-      "timestamp_end": "2020/11/30 17:05:28"
+      "timestamp_end": "2021/11/30 17:05:28"
     },
     {
       "name": "Job 4",
-      "state": "active",
+      "enabled": true,
       "guid": "22e5c531-c791-4627-8a51-e4f1efd9c5f9",
       "description": "Job executed with all plants from test experiment 2 &3",
       "owner": "mehh",
@@ -178,11 +178,11 @@
       "repetition_mode": "at",
       "repetition_value": 15,
       "timestamp_start": "2020/03/26 17:05:28",
-      "timestamp_end": "2020/03/30 17:05:28"
+      "timestamp_end": "2021/03/30 17:05:28"
     },
     {
       "name": "Job 5",
-      "state": "active",
+      "enabled": true,
       "guid": "3ca16923-2da2-48e0-8b3c-ef30a26e8849",
       "description": "Job executed with plants from test experiment 2 & 3",
       "owner": "mehh two",
@@ -226,7 +226,7 @@
       "repetition_mode": "at",
       "repetition_value": 15,
       "timestamp_start": "2020/04/03 15:00:48",
-      "timestamp_end": "2020/11/09 17:05:28"
+      "timestamp_end": "2021/11/09 17:05:28"
     }
   ]
 }

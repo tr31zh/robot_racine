@@ -83,6 +83,7 @@
     lbl_info: lbl_info
     bt_back: bt_back
     lbl_status: lbl_status
+    pg_global: pg_global
     page_manager: page_manager
     orientation: "vertical"
     sep_size: 0.02
@@ -105,7 +106,13 @@
             halign: 'right'
             valign: 'middle'
             text: "Welcome to RobotRacine control center"
-            size_hint: 1, 1    
+            size_hint: 1, 1
+    ProgressBar:
+        id: pg_global
+        value: 0
+        min: 0
+        max: 1
+        size_hint: 1, 0.02
     BoxLayout:
         orientation: "horizontal"        
         padding: 2
@@ -121,6 +128,7 @@
         id: page_manager
         lbl_title: lbl_title
         lbl_info: lbl_info
+        pg_global: pg_global
         bt_back: bt_back
         lbl_status: lbl_status        
     BoxLayout:
