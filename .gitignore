@@ -133,3 +133,5 @@ dmypy.json
 
 .fake
 .ionide
+
+data/

@@ -8,12 +8,16 @@ from datetime import timedelta as td
 import datetime
 from enum import Enum
 import time
+import shutil
+from pathlib import Path
 
 import pandas as pd
 
 from kivy.network.urlrequest import UrlRequest
 
-logger = logging.getLogger(__name__)
+from picamera import PiCamera
+
+logger = logging.getLogger("rr_drive")
 
 
 TEST_MODE = True
@@ -53,6 +57,7 @@ class JobState(Enum):
     INACTIVE = 0
     WAITING_HOME = 1
     IN_PROGRESS = 2
+    ENDED = 3
 
 
 def job_state_to_text(state):
@@ -62,6 +67,8 @@ def job_state_to_text(state):
         return "waiting home position"
     elif state == JobState.IN_PROGRESS:
         return "in progress"
+    elif state == JobState.ENDED:
+        return "ended"
     else:
         return "unknown"
 
@@ -188,6 +195,11 @@ class Controller:
         self.callback = None
         self.waiting_commands = []
         self.awaiting_command = False
+
+        self.camera = PiCamera()
+        # self.camera.framerate = 15
+        # self.camera.resolution = (640, 480)
+        # self.camera.resolution = (1920, 1440)
 
         self.job_in_progress = None
 
@@ -317,12 +329,13 @@ class Controller:
                         log_level=logging.INFO,
                     )
                 elif self.job_in_progress.state == JobState.IN_PROGRESS:
-                    self.job_in_progress.state = JobState.INACTIVE
+                    self.job_in_progress.state = JobState.ENDED
                     self.callback(
                         message=f"Job {self.job_in_progress.name} - Ended",
                         wipe_after=5,
                         log_level=logging.INFO,
                     )
+                    self.job_in_progress.state = JobState.INACTIVE
                     self.job_in_progress = None
             elif received_command == "go_next":
                 plant = self.get_current_plant()
@@ -342,7 +355,7 @@ class Controller:
                     self.snap(callback=self.callback)
                 else:
                     self.callback(
-                        message=f"Job {self.job_in_progress.name} - {plant['plant_name']} excluded from image capture",
+                        message=f"Job {self.job_in_progress.name} - {self.get_plant_desc()} excluded from image capture",
                         wipe_after=-1,
                         log_level=logging.INFO,
                     )
@@ -435,37 +448,85 @@ class Controller:
             else:
                 return "disabled"
 
-    def snap(self, callback):
-        sr = self.snap_request()
-        if self.job_in_progress is None:
-            prefix = ""
+    def get_picture_name(self):
+        plant = self.get_current_plant()
+        sep = "#"
+        if plant is None:
+            return f"rr{sep}noexp_empty{sep}0{sep}{dt.now().strftime('%Y%m%d_%H%M%S')}"
         else:
-            prefix = f"Job {self.job_in_progress.name} - "
-        if sr == "empty":
+            return f"rr{sep}{plant['experiment']}{sep}{plant['plant_name']}{sep}{plant['position']}{sep}{dt.now().strftime('%Y%m%d_%H%M%S')}"
+
+    def get_plant_desc(self):
+        plant = self.get_current_plant()
+        if plant is None:
+            return "no plant"
+        else:
+            return f"[exp:{plant['experiment']}][name:{plant['plant_name']}][pos:{plant['position']}]"
+
+    def snap(self, callback, save_image: bool = True):
+        sr = self.snap_request()
+        if (self.job_in_progress is not None) and sr == "disabled":
             callback(
-                f"{prefix}Snapped at nothing",
+                f"Capture not allowed for {self.get_plant_desc()}",
                 wipe_after=-1,
                 log_level=logging.WARNING,
             )
-        elif sr == "disabled":
-            callback(
-                f"{prefix}Capture not allowed for plant {self.get_current_plant()['plant_name']}",
-                wipe_after=-1,
-                log_level=logging.WARNING,
-            )
-        elif sr == "allowed":
-            callback(
-                f"{prefix}Snapped plant {self.get_current_plant()['plant_name']}",
-                wipe_after=-1,
-                log_level=logging.INFO,
-            )
-            time.sleep(1)
-        elif sr == "no_tray":
-            callback(
-                f"{prefix}No tray in position",
-                wipe_after=-1,
-                log_level=logging.WARNING,
-            )
+        else:
+            try:
+                self.path_for_send_lock.touch()
+                self.camera.start_preview()
+                self.camera.capture(self.path_to_last_image)
+                self.camera.stop_preview()
+                if save_image is True:
+                    shutil.copy(
+                        self.path_to_last_image,
+                        os.path.join(
+                            os.path.dirname(__file__),
+                            "..",
+                            "data",
+                            "images",
+                            "to_keep"
+                            if (self.job_in_progress is None) and sr == "allowed"
+                            else "to_send",
+                            f"{self.get_picture_name()}.png",
+                        ),
+                    )
+            except Exception as e:
+                callback(
+                    f"Failed to capture image because {repr(e)}",
+                    wipe_after=-1,
+                    log_level=logging.ERROR,
+                )
+                return
+            finally:
+                self.path_for_send_lock.unlink()
+
+            if self.job_in_progress is None:
+                prefix = ""
+            else:
+                prefix = f"Job {self.job_in_progress.name} - "
+
+            if sr == "empty":
+                callback(
+                    f"{prefix} Snapped at nothing",
+                    wipe_after=-1,
+                    log_level=logging.WARNING,
+                    update_captured_image=True,
+                )
+            elif sr == "no_tray":
+                callback(
+                    f"{prefix} No tray in position",
+                    wipe_after=-1,
+                    log_level=logging.WARNING,
+                    update_captured_image=True,
+                )
+            else:
+                callback(
+                    f"Snapped {self.get_plant_desc()}",
+                    wipe_after=-1,
+                    log_level=logging.INFO,
+                    update_captured_image=True,
+                )
 
     def execute_job(self, job: JobData, callback):
         if job.enabled is True:
@@ -495,3 +556,25 @@ class Controller:
                 wipe_after=-1,
                 log_level=logging.WARNING,
             )
+
+    @property
+    def path_to_last_image(self):
+        return os.path.join(
+            os.path.dirname(__file__),
+            "..",
+            "data",
+            "images",
+            "last_picture.png",
+        )
+
+    @property
+    def path_for_send_lock(self) -> Path:
+        return Path(
+            os.path.join(
+                os.path.dirname(__file__),
+                "..",
+                "data",
+                "images",
+                "snap_in_progress.txt",
+            )
+        )
