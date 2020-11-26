@@ -93,7 +93,7 @@
         size_hint: 1, 0.18
         Label:
             id: lbl_title
-            size_hint: 0.4, 1
+            size_hint: 0.2, 1
             markup: True
             text_size: self.size
             halign: 'left'
@@ -266,6 +266,12 @@
   
 <StartUpPage>:
     name: "start_up"
+    go_to_manual_override: go_to_manual_override
+    go_to_manual_capture: go_to_manual_capture
+    go_to_jobs: go_to_jobs
+    go_to_data_in: go_to_data_in
+    go_to_log: go_to_log
+    go_to_settings: go_to_settings
     GridLayout:
         cols: 2
         size_hint: 1, 1
@@ -275,21 +281,25 @@
             orientation: "horizontal"
             spacing: 10
             PageChanger:
+                id: go_to_manual_override
                 lbl_text: "Manual override >"
                 manager:root.manager
                 target: "manual_root"
                 image_path: "../resources/hand1.png"            
             PageChanger:
+                id: go_to_manual_capture
                 lbl_text: "Capture >"
                 manager:root.manager
                 target: "capture"
                 image_path: "../resources/camerapros.png"
         PageChanger:
+            id: go_to_jobs
             lbl_text: "Jobs >"
             manager:root.manager
             target: "manage_jobs"
             image_path: "../resources/servers.png"
         PageChanger:
+            id: go_to_data_in
             lbl_text: "Data In >"
             manager:root.manager
             target: "data_in"
@@ -298,11 +308,13 @@
             orientation: "horizontal"
             spacing: 10
             PageChanger:
+                id: go_to_log
                 lbl_text: "Log >"
                 manager:root.manager
                 target: "log_jobs"
                 image_path: "../resources/printer.png"
             PageChanger:
+                id: go_to_settings
                 lbl_text: "SettingsPage >"
                 manager:root.manager
                 target: "settings"
@@ -339,25 +351,46 @@
 
 <ManualCapture>:
     name: "capture"
+    captured_image: captured_image
+    save_images: save_images
+    snap_image: snap_image
     BoxLayout:
         orientation: "horizontal"
         size_hint: 1, 1
         spacing: 10        
         padding: [10, 0, 10, 0]
-        ImageButton:
-            lbl_text: "Snap"
-            image_path: "../resources/psbuttoncircle.png"
+        BoxLayout:
+            orientation: "vertical"
             size_hint: 0.3, 1
-            image_pos: "top"
-            on_press: root.snap()
+            ImageButton:
+                id: snap_image
+                lbl_text: "Snap"
+                image_path: "../resources/psbuttoncircle.png"                
+                image_pos: "top"
+                on_press: root.snap_picture()
+            BoxLayout:
+                orientation: "horizontal"                
+                size_hint: 1, 0.1
+                CheckBox:             
+                    id: save_images   
+                    text_size: self.size        
+                    halign: 'right'
+                    valign: 'middle'
+                    size_hint: 0.01, 1
+                Label:
+                    halign: 'left'
+                    valign: 'middle'
+                    text: "Save snapped image"
+                    size_hint: 1, 1
         Image:
+            id: captured_image
             canvas.before:
                 Color:
                     rgba: 0,0,0,1
                 Rectangle:
                     pos:self.pos
                     size:self.size
-            source: "../demo/rr_demo_image.jpg"
+            source: "../data/images/last_picture.png"
 
 <Jobs>:
     name: "jobs"

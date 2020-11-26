@@ -30,7 +30,12 @@ class MemoryFilter(logging.Filter):
 
 
 log_file_handler = logging.FileHandler(
-    os.path.join("logs", f"{dt.now().strftime('%Y%m%d %H%M%S')}.log"),
+    os.path.join(
+        os.path.dirname(__file__),
+        "..",
+        "logs",
+        f"dummy_server_{dt.now().strftime('%Y%m%d')}.log",
+    ),
     mode="a",
     delay=True,
 )
@@ -40,8 +45,6 @@ log_stdout_handler = logging.StreamHandler(sys.stdout)
 log_stdout_handler.addFilter(MemoryFilter())
 
 
-if not os.path.exists("logs"):
-    os.mkdir("logs")
 logging.basicConfig(
     level=logging.INFO,
     format="[%(asctime)s - %(mem_data)s - %(name)s - %(levelname)s] - %(message)s",
@@ -52,6 +55,11 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger("test_server")
+
+
+logger.info("__________________________________________________________")
+logger.info("___________________Starting test server___________________")
+logger.info("__________________________________________________________")
 
 
 class S(BaseHTTPRequestHandler):

@@ -4,27 +4,44 @@ from datetime import datetime as dt
 from datetime import timedelta as td
 
 
-log_folder = os.path.join(
-    os.path.dirname(__file__),
-    "..",
-    "data",
-    "logs",
-    "",
+lesser_log = []
+
+
+class LesserFilter(logging.Filter):
+
+    last_process_mem = 0
+
+    def filter(self, record):
+        if record.name in ["robot_racine", "rr_drive"]:
+            lesser_log.append(
+                f"[{dt.now().strftime('%Y/%m/%d %H:%M:%S')} - {record.name} - {record.levelname}] {record.msg}"
+            )
+        return True
+
+
+log_file_handler = logging.FileHandler(
+    os.path.join(
+        os.path.dirname(__file__),
+        "..",
+        "logs",
+        f"robot_racine_{dt.now().strftime('%Y%m%d')}.log",
+    ),
+    mode="a",
+    delay=True,
 )
-if not os.path.exists(log_folder):
-    os.mkdir(log_folder)
-log_path = os.path.join(log_folder, f"{dt.now().strftime('%Y%m%d %H%M%S')}.log")
+log_file_handler.addFilter(LesserFilter())
+
 logging.basicConfig(
     level=logging.INFO,
     format="[%(asctime)s - %(name)s - %(levelname)s] - %(message)s",
-    handlers=[
-        logging.FileHandler(
-            log_path,
-            mode="a",
-            delay=True,
-        )
-    ],
+    handlers=[log_file_handler],
 )
+
+logger = logging.getLogger("robot_racine")
+logger.info("__________________________________________________________")
+logger.info("__________________Starting robot racine___________________")
+logger.info("__________________________________________________________")
+
 
 from uuid import uuid4
 from functools import partial
@@ -52,9 +69,6 @@ controller: Controller = Controller()
 Config.set("graphics", "width", "800")
 Config.set("graphics", "height", "480")
 Config.set("graphics", "borderless", "1")
-
-
-logger = logging.getLogger("ui")
 
 
 class RootWidget(BoxLayout):
@@ -148,12 +162,21 @@ class MyPageManager(ScreenManager):
         self.lbl_info.text = self.current_screen.info_text
         self.lbl_status.text = ""
 
+    def limit_interractivity(self, limit_ui: bool):
+        su_screen = self.get_screen("start_up")
+        su_screen.go_to_manual_override.disabled = limit_ui
+        su_screen.go_to_jobs.disabled = limit_ui
+        su_screen.go_to_data_in.disabled = limit_ui
+        su_screen.go_to_settings.disabled = limit_ui
+        self.get_screen("capture").snap_image.disabled = limit_ui
+
     def update_status(
         self,
         message: str,
         wipe_after: float,
         reset_event: bool = True,
         log_level: int = logging.INFO,
+        update_captured_image: bool = False,
     ):
         self.lbl_status.text = message
         if self.event is not None and reset_event:
@@ -176,6 +199,15 @@ class MyPageManager(ScreenManager):
             logger.critical(message)
         else:
             logger.info(message)
+
+        if (
+            controller.job_in_progress is not None
+            and controller.job_in_progress.state == JobState.ENDED
+        ):
+            self.limit_interractivity(limit_ui=False)
+
+        if update_captured_image is True:
+            self.get_screen("capture").captured_image.reload()
 
     def delayed_update_status(self, message, dt):
         self.lbl_status.text = message
@@ -218,7 +250,15 @@ class MyPageManager(ScreenManager):
                             font_size=20,
                         )
                     else:
-                        controller.execute_job(next_job, self.update_status)
+                        self.set_active_page(
+                            new_page_name="start_up",
+                            direction="right",
+                        )
+                        self.limit_interractivity(limit_ui=True)
+                        controller.execute_job(
+                            next_job,
+                            self.update_status,
+                        )
                 else:
                     count_down_text += f"{td_next.days} days "
                     hours, remainder = divmod(td_next.seconds, 3600)
@@ -306,8 +346,11 @@ class ManualCapture(MyScreen):
 
     bt_back = ObjectProperty(None)
 
-    def snap(self):
-        controller.snap(callback=self.manager.update_status)
+    def snap_picture(self):
+        controller.snap(
+            callback=self.manager.update_status,
+            save_image=self.save_images.active,
+        )
 
 
 class Jobs(MyScreen):
@@ -470,7 +513,10 @@ class JobsManage(MyScreen):
         job = self.get_job(guid=guid)
         if job is None:
             return
-        controller.execute_job(job, self.manager.update_status)
+        controller.execute_job(
+            job,
+            self.manager.update_status,
+        )
 
     def delete_job(self, guid):
         index = self.get_job_index(guid=guid)
@@ -509,10 +555,7 @@ class JobsLog(MyScreen):
     info_text = "Logs, logs everywhere"
 
     def init_logs(self):
-        with open(log_path, "r") as f:
-            self.log_text.text = "\n".join(
-                reversed([line.replace("\n", "") for line in f.readlines() if line != "\n"])
-            )
+        self.log_text.text = "\n".join(reversed(lesser_log))
 
 
 class FileLoader(ModalView):
@@ -606,7 +649,5 @@ class RobotRacineApp(App):
 
 
 if __name__ == "__main__":
-    logger.info("Starting Robot Racine UI")
-    logger.info("________________________")
     rr_app = RobotRacineApp()
     rr_app.run()
