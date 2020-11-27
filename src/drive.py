@@ -300,7 +300,14 @@ class Controller:
         return msg
 
     def on_success(self, *args):
+        print(args)
+
         sent_cmd, _, received_command = args
+
+        if received_command:
+            received_command = (
+                received_command.split("<br>")[-1].replace("\n", "").replace("\r", "")
+            )
 
         if sent_cmd != received_command:
             logger.error(
@@ -360,12 +367,13 @@ class Controller:
                         log_level=logging.INFO,
                     )
             elif received_command == "stop":
-                self.job_in_progress.state = JobState.INACTIVE
+                self.job_in_progress.state = JobState.ENDED
                 self.callback(
                     message=f"Job {self.job_in_progress.name} - Cancelled",
                     wipe_after=5,
                     log_level=logging.INFO,
                 )
+                self.job_in_progress.state = JobState.INACTIVE
         else:
             self.callback(
                 message=self.state_to_text(),
@@ -401,7 +409,15 @@ class Controller:
             self.awaiting_command = True
             if command == "stop":
                 self.waiting_commands = []
-                self.job_in_progress = None
+                if self.job_in_progress is not None:
+                    self.job_in_progress.state = JobState.ENDED
+                    self.callback(
+                        message=f"Job {self.job_in_progress.name} - Cancelled",
+                        wipe_after=5,
+                        log_level=logging.INFO,
+                    )
+                    self.job_in_progress.state = JobState.INACTIVE
+                    self.job_in_progress = None
                 self.robot_state["last_state"] = -1
                 self.robot_state["current_state"] = -1
             elif command == "go_next":
@@ -418,8 +434,11 @@ class Controller:
             self.callback = callback
             logger.info(f"Sent {command}")
             self.r = UrlRequest(
-                url=f"{self.settings['target_ip']}:{self.settings['target_port']}",
-                req_body=f'{{"action": "{command}"}}',
+                url=f"{self.settings['target_ip']}:{self.settings['target_port']}/{command}",
+                req_headers={
+                    "Content-type": "application/x-www-form-urlencoded",
+                    "Accept": "text/plain",
+                },
                 on_success=partial(self.on_success, command),
                 on_failure=partial(self.on_failure, command),
             )
@@ -529,33 +548,26 @@ class Controller:
                 )
 
     def execute_job(self, job: JobData, callback):
-        if job.enabled is True:
-            callback(
-                f"Starting Job {job.name}",
-                wipe_after=-1,
-                log_level=logging.INFO,
-            )
-            self.job_in_progress = job
-            self.job_in_progress.state = JobState.WAITING_HOME
+        callback(
+            f"Starting Job {job.name}",
+            wipe_after=-1,
+            log_level=logging.INFO,
+        )
+        self.job_in_progress = job
+        self.job_in_progress.state = JobState.WAITING_HOME
+        self.send_command(
+            command="go_home",
+            callback=callback,
+        )
+        for _ in range(self.settings["tray_count"]):
             self.send_command(
-                command="go_home",
+                command="go_next",
                 callback=callback,
             )
-            for _ in range(self.settings["tray_count"]):
-                self.send_command(
-                    command="go_next",
-                    callback=callback,
-                )
-            self.send_command(
-                command="go_home",
-                callback=callback,
-            )
-        else:
-            callback(
-                f"Job {job.name} is not active, skipped",
-                wipe_after=-1,
-                log_level=logging.WARNING,
-            )
+        self.send_command(
+            command="go_home",
+            callback=callback,
+        )
 
     @property
     def path_to_last_image(self):

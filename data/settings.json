@@ -1,6 +1,6 @@
 {
-  "target_ip": "http://127.0.0.1",
-  "target_port": 8000,
+  "target_ip": "http://192.168.0.23",
+  "target_port": 80,
   "tray_count": 56,
   "show_images": false
 }

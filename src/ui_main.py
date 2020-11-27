@@ -2,6 +2,7 @@ import os
 import logging
 from datetime import datetime as dt
 from datetime import timedelta as td
+import subprocess
 
 
 lesser_log = []
@@ -205,6 +206,7 @@ class MyPageManager(ScreenManager):
             and controller.job_in_progress.state == JobState.ENDED
         ):
             self.limit_interractivity(limit_ui=False)
+            subprocess.call("xset +dpms", shell=True)
 
         if update_captured_image is True:
             self.get_screen("capture").captured_image.reload()
@@ -212,6 +214,15 @@ class MyPageManager(ScreenManager):
     def delayed_update_status(self, message, dt):
         self.lbl_status.text = message
         return False
+
+    def launch_job(self, job):
+        if job is None:
+            logger.warning("No job to launch")
+        else:
+            subprocess.call("xset dpms force on", shell=True)
+            self.set_active_page(new_page_name="start_up", direction="right")
+            self.limit_interractivity(limit_ui=True)
+            controller.execute_job(job, self.update_status)
 
     def update_countdown(self, delta):
         if controller.job_in_progress is not None:
@@ -250,15 +261,8 @@ class MyPageManager(ScreenManager):
                             font_size=20,
                         )
                     else:
-                        self.set_active_page(
-                            new_page_name="start_up",
-                            direction="right",
-                        )
-                        self.limit_interractivity(limit_ui=True)
-                        controller.execute_job(
-                            next_job,
-                            self.update_status,
-                        )
+                        self.launch_job(job=next_job)
+
                 else:
                     count_down_text += f"{td_next.days} days "
                     hours, remainder = divmod(td_next.seconds, 3600)
@@ -510,13 +514,7 @@ class JobsManage(MyScreen):
         self.update_data(guid=guid)
 
     def start_job(self, guid):
-        job = self.get_job(guid=guid)
-        if job is None:
-            return
-        controller.execute_job(
-            job,
-            self.manager.update_status,
-        )
+        self.manager.launch_job(job=self.get_job(guid=guid))
 
     def delete_job(self, guid):
         index = self.get_job_index(guid=guid)
