@@ -200,7 +200,7 @@ void buildResponse(WiFiClient client, String msg) {
   client.print("Click <a href=\"/start\">here</a> Start (turn green LED on)<br>");
   client.print("Click <a href=\"/stop\">here</a> Stop (turn red LED on)<br>");
   client.print("Click <a href=\"/go_next\">here</a> Go next (turn yellow LED on)<br>");
-  client.print("Click <a href=\"/go_home\">here</a> Stop (turn blue LED on)<br>");
+  client.print("Click <a href=\"/go_home\">here</a> Go home (turn blue LED on)<br>");
   client.print(msg);
   client.println();
   client.println();
