@@ -151,20 +151,37 @@ void loop() {
     }
 
     if (received_command == "go_home") {
-      digitalWrite(bluLed, LOW);
-      digitalWrite(redLed, LOW);
-      digitalWrite(greenLed, HIGH);
-      digitalWrite(yellowLed, LOW);
-      digitalWrite(whiteLed, HIGH);
       int homeSensor = digitalRead(buttonHome);
-      while (homeSensor == HIGH) {
-        homeSensor = digitalRead(buttonHome);
-        delay(10);
+      if (homeSensor == LOW) {
+        buildResponse(client, received_command);
+      } else {
+        digitalWrite(bluLed, LOW);
+        digitalWrite(redLed, LOW);
+        digitalWrite(greenLed, HIGH);
+        digitalWrite(yellowLed, LOW);
+        digitalWrite(whiteLed, HIGH);
+        int homeSensor = digitalRead(buttonHome);
+        int aux = 0;
+        while (homeSensor == HIGH) {
+          homeSensor = digitalRead(buttonHome);
+          delay(10);
+          if (aux < 40) {
+            digitalWrite(bluLed, HIGH);
+          }
+          if (aux > 40) {
+            digitalWrite(bluLed, LOW);
+          }
+          if (aux > 80) {
+            aux = 0;
+          } else {
+            aux++;
+          }
+        }
+        digitalWrite(bluLed, HIGH);
+        digitalWrite(whiteLed, LOW);      
+        digitalWrite(greenLed, LOW);
+        buildResponse(client, received_command);
       }
-      digitalWrite(bluLed, HIGH);
-      digitalWrite(whiteLed, LOW);      
-      digitalWrite(greenLed, LOW);
-      buildResponse(client, received_command);
     }
 
     if (received_command == "go_next") {
@@ -175,9 +192,21 @@ void loop() {
       digitalWrite(whiteLed, HIGH);
       delay(500);
       int nextSensor = digitalRead(buttonNext);
+      int aux = 0;
       while (nextSensor == HIGH) {
         nextSensor = digitalRead(buttonNext);
-        delay(10);
+        delay(10);        
+        if (aux < 40) {
+          digitalWrite(yellowLed, HIGH);
+        }
+        if (aux > 40) {
+          digitalWrite(yellowLed, LOW);
+        }
+        if (aux > 80) {
+          aux = 0;
+        } else {
+          aux++;
+        }
       }
       digitalWrite(yellowLed, HIGH);
       digitalWrite(whiteLed, LOW);
@@ -197,10 +226,28 @@ void buildResponse(WiFiClient client, String msg) {
   client.println("Content-type:text/html");
   client.println();
   // the content of the HTTP response follows the header:
-  client.print("Click <a href=\"/start\">here</a> Start (turn green LED on)<br>");
-  client.print("Click <a href=\"/stop\">here</a> Stop (turn red LED on)<br>");
-  client.print("Click <a href=\"/go_next\">here</a> Go next (turn yellow LED on)<br>");
-  client.print("Click <a href=\"/go_home\">here</a> Go home (turn blue LED on)<br>");
+  client.print("  <!DOCTYPE html>");
+  client.print("<html lang=\"en\">");
+  client.print("<head>");
+  client.print("  <title>Bootstrap Example</title>");
+  client.print("  <meta charset=\"utf-8\">");
+  client.print("  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">");
+  client.print("  <link rel=\"stylesheet\" href=\"https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css\">");
+  client.print("  <script src=\"https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js\"></script>");
+  client.print("  <script src=\"https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/js/bootstrap.min.js\"></script>");
+  client.print("</head>");
+  client.print("<body>");
+  client.print("");
+  client.print("<div class=\"container\">");
+  client.print("  <h2>Manual command overrides</h2>");
+  client.print("  <a href=\"/start\" class=\"btn btn-success\" role=\"button\">Start (turn green LED on)</a><br><br>");
+  client.print("  <a href=\"/stop\" class=\"btn btn-danger\" role=\"button\">Stop (turn red LED on)</a><br><br>");
+  client.print("  <a href=\"/go_next\" class=\"btn btn-warning\" role=\"button\">Go next (turn yellow LED on)</a><br><br>");
+  client.print("  <a href=\"/go_home\" class=\"btn btn-primary\" role=\"button\">Go home (turn blue LED on)</a><br><br>");
+  client.print("</div>");
+  client.print("");
+  client.print("</body>");
+  client.print("</html>");
   client.print(msg);
   client.println();
   client.println();
