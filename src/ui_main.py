@@ -206,6 +206,7 @@ class MyPageManager(ScreenManager):
             and controller.job_in_progress.state == JobState.ENDED
         ):
             self.limit_interractivity(limit_ui=False)
+            controller.path_for_send_lock.unlink()
             subprocess.call("xset +dpms", shell=True)
 
         if update_captured_image is True:
@@ -219,6 +220,7 @@ class MyPageManager(ScreenManager):
         if job is None:
             logger.warning("No job to launch")
         else:
+            controller.path_for_send_lock.touch()
             subprocess.call("xset dpms force on", shell=True)
             self.set_active_page(new_page_name="start_up", direction="right")
             self.limit_interractivity(limit_ui=True)

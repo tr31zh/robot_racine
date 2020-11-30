@@ -10,6 +10,9 @@ from enum import Enum
 import time
 import shutil
 from pathlib import Path
+import socket
+import subprocess
+import glob
 
 import pandas as pd
 
@@ -242,6 +245,58 @@ class Controller:
         self.save_plant_data()
         self.save_jobs_data()
 
+    def check_send_tool(self, callback):
+        # Check script is running
+        def check_script() -> bool:
+            p1 = subprocess.Popen(["pgrep", "-af", "python"], stdout=subprocess.PIPE)
+            p2 = subprocess.Popen(
+                ["grep", "send_images.py"], stdin=p1.stdout, stdout=subprocess.PIPE
+            )
+            p1.stdout.close()
+            output, err = p2.communicate()
+            return (err is None) and ("send_images.py" in str(output))
+
+        if not check_script():
+            callback(
+                f"Sender script not active, launching it",
+                wipe_after=-1,
+                log_level=logging.INFO,
+            )
+            try:
+                subprocess.Popen(["python", "src/send_images.py"])
+            except Exception as e:
+                callback(
+                    f"Unable to launch file sender because {repr(e)}, images won't be sent to server",
+                    wipe_after=-1,
+                    log_level=logging.ERROR,
+                )
+
+        # Check files are not too ald
+        images = glob.glob(
+            os.path.join(
+                os.path.dirname(__file__),
+                "..",
+                "data",
+                "images",
+                "to_send",
+                "*",
+            )
+        )
+        files_ok = (
+            True
+            if not images
+            else (
+                dt.now() - dt.fromtimestamp(os.path.getmtime(min(images, key=os.path.getctime)))
+            ).seconds
+            < 7200
+        )
+        if not files_ok:
+            callback(
+                f"File sender script seems to have an issue, images won't be sent to server",
+                wipe_after=-1,
+                log_level=logging.ERROR,
+            )
+
     def load(self):
         try:
             if os.path.isfile(plant_data_path):
@@ -300,14 +355,21 @@ class Controller:
         return msg
 
     def on_success(self, *args):
-        print(args)
-
         sent_cmd, _, received_command = args
 
         if received_command:
             received_command = (
                 received_command.split("<br>")[-1].replace("\n", "").replace("\r", "")
             )
+
+        if received_command == "stopped":
+            self.callback(
+                message=f"Received response for {sent_cmd} cancel request",
+                wipe_after=5,
+                log_level=logging.INFO,
+            )
+            self.awaiting_command = False
+            return
 
         if sent_cmd != received_command:
             logger.error(
@@ -405,22 +467,30 @@ class Controller:
             )
 
     def send_command(self, command, callback):
-        if command == "stop" or self.awaiting_command is False:
+        if command == "stop":
+            self.waiting_commands = []
+            if self.job_in_progress is not None:
+                self.job_in_progress.state = JobState.ENDED
+                self.callback(
+                    message=f"Job {self.job_in_progress.name} - Cancelled",
+                    wipe_after=5,
+                    log_level=logging.INFO,
+                )
+                self.job_in_progress.state = JobState.INACTIVE
+                self.job_in_progress = None
+            self.robot_state["last_state"] = -1
+            self.robot_state["current_state"] = -1
+            sock = socket.socket(
+                socket.AF_INET,  # Internet
+                socket.SOCK_DGRAM,  # UDP
+            )
+            sock.sendto(
+                bytes("STOP", "utf-8"),
+                (self.settings["target_ip"], self.settings["target_stop_port"]),
+            )
+        elif self.awaiting_command is False:
             self.awaiting_command = True
-            if command == "stop":
-                self.waiting_commands = []
-                if self.job_in_progress is not None:
-                    self.job_in_progress.state = JobState.ENDED
-                    self.callback(
-                        message=f"Job {self.job_in_progress.name} - Cancelled",
-                        wipe_after=5,
-                        log_level=logging.INFO,
-                    )
-                    self.job_in_progress.state = JobState.INACTIVE
-                    self.job_in_progress = None
-                self.robot_state["last_state"] = -1
-                self.robot_state["current_state"] = -1
-            elif command == "go_next":
+            if command == "go_next":
                 self.robot_state["last_state"] = self.robot_state["current_state"]
                 self.robot_state["current_state"] = -1
             elif command in ["stop", "start", "go_home"]:
@@ -434,7 +504,7 @@ class Controller:
             self.callback = callback
             logger.info(f"Sent {command}")
             self.r = UrlRequest(
-                url=f"{self.settings['target_ip']}:{self.settings['target_port']}/{command}",
+                url=f"http://{self.settings['target_ip']}:{self.settings['target_port']}/{command}",
                 req_headers={
                     "Content-type": "application/x-www-form-urlencoded",
                     "Accept": "text/plain",
@@ -492,7 +562,6 @@ class Controller:
             )
         else:
             try:
-                self.path_for_send_lock.touch()
                 self.camera.start_preview()
                 self.camera.capture(self.path_to_last_image)
                 self.camera.stop_preview()
@@ -504,9 +573,9 @@ class Controller:
                             "..",
                             "data",
                             "images",
-                            "to_keep"
-                            if (self.job_in_progress is None) and sr == "allowed"
-                            else "to_send",
+                            "to_send"
+                            if (self.job_in_progress is not None) and (sr == "allowed")
+                            else "to_keep",
                             f"{self.get_picture_name()}.png",
                         ),
                     )
@@ -517,8 +586,6 @@ class Controller:
                     log_level=logging.ERROR,
                 )
                 return
-            finally:
-                self.path_for_send_lock.unlink()
 
             if self.job_in_progress is None:
                 prefix = ""
@@ -548,6 +615,7 @@ class Controller:
                 )
 
     def execute_job(self, job: JobData, callback):
+        self.check_send_tool(callback)
         callback(
             f"Starting Job {job.name}",
             wipe_after=-1,

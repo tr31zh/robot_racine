@@ -60,7 +60,7 @@ def main():
                 logger.info(f"Moved {name}")
 
         logger.info("Going to sleep for a while...")
-        sleep(60)
+        sleep(600)
 
 
 if __name__ == "__main__":
