@@ -6,6 +6,7 @@
 
 #include <SPI.h>
 #include <WiFiNINA.h>
+#include <WiFiUdp.h>
 #include "wifi_credentials.h" 
 
 ///////please enter your sensitive data in the Secret tab/arduino_secrets.h
@@ -27,7 +28,13 @@ int buttonHome = 8;
 int status = WL_IDLE_STATUS;
 int nextAlreadyTriggered = 0;
 
+// UDP
+unsigned int localPort = 2390;
+char packetBuffer[256]; //buffer to hold incoming packet
+char  ReplyBuffer[] = "stopped"; // a string to send back
+
 WiFiServer server(80);
+WiFiUDP Udp;
 
 void setup() {
 
@@ -74,12 +81,20 @@ void setup() {
   // start the web server on port 80
   server.begin();
 
+  // Start UDP connexion
+  Udp.begin(localPort);
+
   // you're connected now, so print out the status
   printWiFiStatus();
 }
 
 void loop() {
 
+  if (checkStopCommand() == 1) {
+    doStop();
+    exit;
+  }
+  
   // compare the previous status to the current status
   if (status != WiFi.status()) {
     // it has changed update the variable
@@ -95,14 +110,14 @@ void loop() {
 
   String received_command = "";
   
-  WiFiClient client = server.available();   // listen for incoming clients
-  if (client) {                             // if you get a client,
-    String currentLine = "";                // make a String to hold incoming data from the client
-    while (client.connected()) {            // loop while the client's connected
-      if (client.available()) {             // if there's bytes to read from the client,
-        char c = client.read();             // read a byte, then
-        Serial.write(c);                    // print it out the serial monitor
-        if (c == '\n') {                    // if the byte is a newline character
+  WiFiClient client = server.available();
+  if (client) {
+    String currentLine = "";
+    while (client.connected()) {
+      if (client.available()) {
+        char c = client.read();
+        Serial.write(c);
+        if (c == '\n') {
           if (currentLine.length() == 0) {            
             break;
           }
@@ -133,85 +148,20 @@ void loop() {
     }
 
     if (received_command == "start") {
-      digitalWrite(bluLed, LOW);
-      digitalWrite(redLed, LOW);
-      digitalWrite(greenLed, HIGH);
-      digitalWrite(yellowLed, LOW);
-      buildResponse(client, received_command);
+      doStart(client);
     }
 
     if (received_command == "stop") {
-      digitalWrite(bluLed, LOW);
-      digitalWrite(redLed, HIGH);
-      digitalWrite(greenLed, LOW);
-      digitalWrite(yellowLed, LOW);
-      buildResponse(client, received_command);
-      delay(500);
-      digitalWrite(redLed, LOW);
+      doStop();      
+      buildResponse(client, "stop");
     }
 
     if (received_command == "go_home") {
-      int homeSensor = digitalRead(buttonHome);
-      if (homeSensor == LOW) {
-        buildResponse(client, received_command);
-      } else {
-        digitalWrite(bluLed, LOW);
-        digitalWrite(redLed, LOW);
-        digitalWrite(greenLed, HIGH);
-        digitalWrite(yellowLed, LOW);
-        digitalWrite(whiteLed, HIGH);
-        int homeSensor = digitalRead(buttonHome);
-        int aux = 0;
-        while (homeSensor == HIGH) {
-          homeSensor = digitalRead(buttonHome);
-          delay(10);
-          if (aux < 40) {
-            digitalWrite(bluLed, HIGH);
-          }
-          if (aux > 40) {
-            digitalWrite(bluLed, LOW);
-          }
-          if (aux > 80) {
-            aux = 0;
-          } else {
-            aux++;
-          }
-        }
-        digitalWrite(bluLed, HIGH);
-        digitalWrite(whiteLed, LOW);      
-        digitalWrite(greenLed, LOW);
-        buildResponse(client, received_command);
-      }
+      doGoHome(client);      
     }
 
     if (received_command == "go_next") {
-      digitalWrite(bluLed, LOW);
-      digitalWrite(redLed, LOW);
-      digitalWrite(greenLed, HIGH);
-      digitalWrite(yellowLed, LOW);
-      digitalWrite(whiteLed, HIGH);
-      delay(500);
-      int nextSensor = digitalRead(buttonNext);
-      int aux = 0;
-      while (nextSensor == HIGH) {
-        nextSensor = digitalRead(buttonNext);
-        delay(10);        
-        if (aux < 40) {
-          digitalWrite(yellowLed, HIGH);
-        }
-        if (aux > 40) {
-          digitalWrite(yellowLed, LOW);
-        }
-        if (aux > 80) {
-          aux = 0;
-        } else {
-          aux++;
-        }
-      }
-      digitalWrite(yellowLed, HIGH);
-      digitalWrite(whiteLed, LOW);
-      digitalWrite(greenLed, LOW);
-      buildResponse(client, received_command);
+      doGoNext(client);      
     }
 
     // close the connection:
@@ -247,10 +197,143 @@ void buildResponse(WiFiClient client, String msg) {
   client.print("</div>");
   client.print("");
   client.print("</body>");
-  client.print("</html>");
+  client.println("</html><br>");
   client.print(msg);
   client.println();
   client.println();
+}
+
+void doStart(WiFiClient client) {
+  digitalWrite(bluLed, LOW);
+  digitalWrite(redLed, LOW);
+  digitalWrite(greenLed, HIGH);
+  digitalWrite(yellowLed, LOW);
+  buildResponse(client, "start");
+}
+
+void doStop() {
+  digitalWrite(bluLed, LOW);
+  digitalWrite(redLed, HIGH);
+  digitalWrite(greenLed, LOW);
+  digitalWrite(yellowLed, LOW);
+  delay(500);
+  digitalWrite(redLed, LOW);
+}
+
+void doGoHome(WiFiClient client) {
+  int homeSensor = digitalRead(buttonHome);
+  if (homeSensor == LOW) {
+    buildResponse(client, "go_home");
+  } else {
+    digitalWrite(bluLed, LOW);
+    digitalWrite(redLed, LOW);
+    digitalWrite(greenLed, HIGH);
+    digitalWrite(yellowLed, LOW);
+    digitalWrite(whiteLed, HIGH);
+    int homeSensor = digitalRead(buttonHome);
+    int aux = 0;
+    int stop_requested = 0;
+    while (homeSensor == HIGH) {
+      homeSensor = digitalRead(buttonHome);
+      delay(10);
+      if (aux < 40) {
+        digitalWrite(bluLed, HIGH);
+      }
+      if (aux > 40) {
+        digitalWrite(bluLed, LOW);
+      }
+      if (aux > 80) {
+        aux = 0;
+      } else {
+        aux++;
+      }
+      if (checkStopCommand() == 1) {
+        doStop();
+        stop_requested = 1;
+        break;
+      }
+    }
+    digitalWrite(whiteLed, LOW);
+    digitalWrite(greenLed, LOW);
+    if (stop_requested == 1) {
+      digitalWrite(bluLed, LOW);
+      buildResponse(client, "stopped");
+    } else {
+      digitalWrite(bluLed, HIGH);
+      buildResponse(client, "go_home");
+    }  
+  }
+}
+
+void doGoNext(WiFiClient client) {
+  digitalWrite(bluLed, LOW);
+  digitalWrite(redLed, LOW);
+  digitalWrite(greenLed, HIGH);
+  digitalWrite(yellowLed, LOW);
+  digitalWrite(whiteLed, HIGH);
+  delay(500);
+  int nextSensor = digitalRead(buttonNext);
+  int aux = 0;
+  int stop_requested = 0;
+  while (nextSensor == HIGH) {
+    nextSensor = digitalRead(buttonNext);
+    delay(10);        
+    if (aux < 40) {
+      digitalWrite(yellowLed, HIGH);
+    }
+    if (aux > 40) {
+      digitalWrite(yellowLed, LOW);
+    }
+    if (aux > 80) {
+      aux = 0;
+    } else {
+      aux++;
+    }
+    if (checkStopCommand() == 1) {
+      doStop();
+      stop_requested = 1;
+      break;
+    }
+  }
+  digitalWrite(whiteLed, LOW);
+  digitalWrite(greenLed, LOW);
+  if (stop_requested == 1) {
+    digitalWrite(yellowLed, LOW);
+    buildResponse(client, "stopped");
+  } else {
+    digitalWrite(yellowLed, HIGH);
+    buildResponse(client, "go_next");
+  }  
+}
+
+int checkStopCommand() {
+  int packetSize = Udp.parsePacket();
+  if (packetSize) {
+    Serial.print("Received packet of size ");
+    Serial.println(packetSize);
+    Serial.print("From ");
+    IPAddress remoteIp = Udp.remoteIP();
+    Serial.print(remoteIp);
+    Serial.print(", port ");
+    Serial.println(Udp.remotePort());
+
+    // read the packet into packetBufffer
+    int len = Udp.read(packetBuffer, 255);
+    if (len > 0) {
+      packetBuffer[len] = 0;
+    }
+    Serial.println("Contents:");
+    Serial.println(packetBuffer);
+
+    // send a reply, to the IP address and port that sent us the packet we received
+    Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
+    Udp.write(ReplyBuffer);
+    Udp.endPacket();
+
+    return 1;
+  } else {
+    return 0; 
+  }
 }
 
 void printWiFiStatus() {
