@@ -629,12 +629,15 @@ class SettingsPage(MyScreen):
         self.target_ip.text = controller.settings["target_ip"]
         self.target_port.text = str(controller.settings["target_port"])
         self.tray_count.text = str(controller.settings["tray_count"])
+        self.image_resolution.text = controller.settings["image_resolution"]
 
     def save_settings(self):
         try:
             controller.settings["target_ip"] = self.target_ip.text
             controller.settings["target_port"] = int(self.target_port.text)
             controller.settings["tray_count"] = self.tray_count.text
+            controller.settings["image_resolution"] = self.image_resolution.text
+            controller.update_camera_resolution()
         except Exception as e:
             logger.error(f"Failed to save settings because: {repr(e)}")
         else:

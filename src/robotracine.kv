@@ -370,7 +370,8 @@
                 on_press: root.snap_picture()
             BoxLayout:
                 orientation: "horizontal"                
-                size_hint: 1, 0.1
+                size_hint: 1, 0.2
+                padding: [10, 0, 10, 0]
                 CheckBox:             
                     id: save_images   
                     text_size: self.size        
@@ -852,6 +853,7 @@
     target_ip: target_ip
     target_port: target_port
     tray_count: tray_count
+    image_resolution: image_resolution
     BoxLayout:
         orientation: "vertical"
         size_hint: 1, 1
@@ -897,6 +899,20 @@
             TextInput:
                 id: tray_count
                 text: "-1"
+        BoxLayout:
+            orientation: "horizontal"                
+            padding: 6
+            size_hint: 1, self.parent.default_line_height
+            Label:
+                text: "Image resolution:"
+                text_size: self.size        
+                halign: 'left'
+                valign: 'middle'
+                size_hint: 0.3, 1
+            Spinner:
+                id: image_resolution
+                text: '1024x768'
+                values: '680x480', '800x600', '1024x768', '1296x972', '1920x1080', '1920x1440', '2592x1944'
         BoxLayout:
             orientation: "horizontal"                
             padding: 6

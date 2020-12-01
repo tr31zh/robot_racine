@@ -200,9 +200,6 @@ class Controller:
         self.awaiting_command = False
 
         self.camera = PiCamera()
-        # self.camera.framerate = 15
-        # self.camera.resolution = (640, 480)
-        # self.camera.resolution = (1920, 1440)
 
         self.job_in_progress = None
 
@@ -309,7 +306,7 @@ class Controller:
             if os.path.isfile(jobs_file_path):
                 with open(jobs_file_path, "r") as f:
                     self.jobs_data = [JobData(**j) for j in json.load(f)["jobs"]]
-                self.jobs_data[0].timestamp_start = dt.now() - td(hours=1) + td(seconds=15)
+                # self.jobs_data[0].timestamp_start = dt.now() - td(hours=1) + td(seconds=15)
             else:
                 self.jobs_data = []
 
@@ -320,13 +317,25 @@ class Controller:
                 self.settings = {
                     "target_ip": "http://127.0.0.1",
                     "target_port": 8000,
+                    "target_stop_port": 2390,
                     "tray_count": 56,
+                    "image_resolution": "1024x768",
                     "show_images": False,
                 }
+                self.update_camera_resolution()
         except Exception as e:
             logger.error(f"Failed to load data because: {repr(e)}")
         else:
             logger.info("Loaded data")
+
+    def update_camera_resolution(self):
+        try:            
+            self.camera.framerate = 15
+            self.camera.resolution = self.settings["image_resolution"].split("x")
+        except Exception as e:
+            logger.error(f"Unable to set camera resolution because {repr(e)}")
+            self.camera.resolution = (1024, 768)            
+
 
     def get_next_job(self):
         n = dt.now()
