@@ -27,6 +27,7 @@
   - [Other scripts](#other-scripts)
     - [send_images.py](#send_imagespy)
     - [camera_setting.py](#camera_settingpy)
+  - [Authors](#authors)
 
 ## Introduction
 
@@ -220,3 +221,7 @@ This script is launched by the UI if not active to automatically send the images
 ### camera_setting.py
 
 Use this script to set up the camera.
+
+## Authors
+
+Authors: Felicià Antoni Maviane Macia
