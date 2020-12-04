@@ -27,6 +27,7 @@
   - [Other scripts](#other-scripts)
     - [send_images.py](#send_imagespy)
     - [camera_setting.py](#camera_settingpy)
+  - [Authors](#authors)
 
 ## Introduction
 
@@ -221,3 +222,7 @@ This script is launched by the UI every 6 minutes if not already running to send
 ### camera_setting.py
 
 Use this script to set up the camera.
+
+## Authors
+
+Authors: Felicià Antoni Maviane Macia

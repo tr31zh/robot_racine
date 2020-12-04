@@ -10,20 +10,17 @@
 #include "wifi_credentials.h" 
 
 ///////please enter your sensitive data in the Secret tab/arduino_secrets.h
-char ssid[] = SECRET_SSID;        // your network SSID (name)
-char pass[] = SECRET_PASS;    // your network password (use for WPA, or use as key for WEP)
-int keyIndex = 0;                // your network key Index number (needed only for WEP)
+char ssid[] = SECRET_SSID; // your network SSID (name)
+char pass[] = SECRET_PASS; // your network password (use for WPA, or use as key for WEP)
 
-// SD
+// Simulation code
 int bluLed = 7; // Home
 int redLed = 3; // Stop
 int greenLed = 5; // Start
 int yellowLed = 11; // Next
 int whiteLed = 1; // In transition
-
 int buttonNext = 12;
 int buttonHome = 8;
-
 
 int status = WL_IDLE_STATUS;
 int nextAlreadyTriggered = 0;
@@ -46,7 +43,7 @@ void setup() {
 
   Serial.println("Access Point Web Server");
 
-  // SD  
+  // Simulation code
   pinMode(bluLed, OUTPUT);
   pinMode(redLed, OUTPUT);
   pinMode(greenLed, OUTPUT);
@@ -144,23 +141,36 @@ void loop() {
         if (currentLine.endsWith("GET /start")) {
           received_command = "start";
         }
+
+        if (currentLine.endsWith("GET /")) {
+          received_command = "";
+        }
       }
     }
 
     if (received_command == "start") {
+      Serial.println("Reponding to start command");
       doStart(client);
     }
 
     if (received_command == "stop") {
+      Serial.println("Reponding to stop command");
       doStop();      
       buildResponse(client, "stop");
     }
 
+    if (received_command == "") {
+      Serial.println("Reponding to no command, displaying default page");
+      buildResponse(client, "");
+    }
+
     if (received_command == "go_home") {
+      Serial.println("Reponding to go home command");
       doGoHome(client);      
     }
 
     if (received_command == "go_next") {
+      Serial.println("Reponding to go next command");
       doGoNext(client);      
     }
 
@@ -233,6 +243,7 @@ void doGoHome(WiFiClient client) {
     int homeSensor = digitalRead(buttonHome);
     int aux = 0;
     int stop_requested = 0;
+    int count_attempts = 0;
     while (homeSensor == HIGH) {
       homeSensor = digitalRead(buttonHome);
       delay(10);
@@ -250,6 +261,12 @@ void doGoHome(WiFiClient client) {
       if (checkStopCommand() == 1) {
         doStop();
         stop_requested = 1;
+        break;
+      }
+      // If no board is present simulate button pressing with a time out
+      count_attempts++;
+      if (count_attempts >= 200) {
+        Serial.println("Button waiting Time out");
         break;
       }
     }
@@ -275,6 +292,7 @@ void doGoNext(WiFiClient client) {
   int nextSensor = digitalRead(buttonNext);
   int aux = 0;
   int stop_requested = 0;
+  int count_attempts = 0;
   while (nextSensor == HIGH) {
     nextSensor = digitalRead(buttonNext);
     delay(10);        
@@ -292,6 +310,12 @@ void doGoNext(WiFiClient client) {
     if (checkStopCommand() == 1) {
       doStop();
       stop_requested = 1;
+      break;
+    }
+    // If no board is present simulate button pressing with a time out
+    count_attempts++;
+    if (count_attempts >= 200) {
+      Serial.println("Button waiting Time out");
       break;
     }
   }
