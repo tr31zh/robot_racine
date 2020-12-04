@@ -3,6 +3,8 @@ import logging
 from datetime import datetime as dt
 from datetime import timedelta as td
 import subprocess
+from multiprocessing import Process
+from timeit import default_timer as timer
 
 
 lesser_log = []
@@ -62,7 +64,7 @@ from kivy.uix.label import Label
 from kivy.uix.modalview import ModalView
 from kivy.clock import Clock
 
-from drive import Controller, JobData, JobState
+from drive import Controller, JobData, JobState, send_pictures
 
 
 controller: Controller = Controller()
@@ -70,6 +72,8 @@ controller: Controller = Controller()
 Config.set("graphics", "width", "800")
 Config.set("graphics", "height", "480")
 Config.set("graphics", "borderless", "1")
+
+MOVE_IMAGES_MIN_INTERVAL = 6 * 60
 
 
 class RootWidget(BoxLayout):
@@ -133,6 +137,7 @@ class MyPageManager(ScreenManager):
             self.update_countdown,
             0.1,
         )
+        self.last_time_sending_image = timer()
 
     def on_back(self):
         self.current_screen.back()
@@ -227,7 +232,42 @@ class MyPageManager(ScreenManager):
             controller.execute_job(job, self.update_status)
 
     def update_countdown(self, delta):
-        if controller.job_in_progress is not None:
+        if controller.job_in_progress is None:
+            self.pg_global.value = 0
+            next_job = controller.get_next_job()
+            if next_job:
+                count_down_text = ""
+                td_next = next_job.next_time_point - dt.now()
+                if td_next.days < 1 and td_next.seconds < 11:
+                    move_pictures = False
+                    if td_next.seconds > 0.5:
+                        self.lbl_info.text = self.format_text(
+                            f"Next job {next_job.name} WILL start in {td_next.seconds}{'  ' * round(td_next.seconds)} >",
+                            is_bold=True,
+                            font_size=20,
+                        )
+                    else:
+                        self.launch_job(job=next_job)
+
+                else:
+                    count_down_text += f"{td_next.days} days "
+                    hours, remainder = divmod(td_next.seconds, 3600)
+                    minutes, seconds = divmod(remainder, 60)
+                    count_down_text += f"{hours} hours "
+                    count_down_text += f"{minutes} minutes "
+                    count_down_text += f"and {seconds} seconds"
+                    self.lbl_info.text = f"Next job {next_job.name} starts in {count_down_text}"
+                    move_pictures = minutes * 60 >= MOVE_IMAGES_MIN_INTERVAL
+            else:
+                self.lbl_info.text = "No job in schedule"
+                move_pictures = True
+            if (
+                move_pictures
+                and (timer() - self.last_time_sending_image) > MOVE_IMAGES_MIN_INTERVAL
+            ):
+                self.last_time_sending_image = timer()
+                controller.start_send_tool(self.update_status)
+        else:
             jib = controller.job_in_progress
             if jib.state == JobState.WAITING_HOME:
                 js = "waiting home position"
@@ -249,32 +289,6 @@ class MyPageManager(ScreenManager):
                 is_bold=True,
                 font_size=20,
             )
-        else:
-            self.pg_global.value = 0
-            next_job = controller.get_next_job()
-            if next_job:
-                count_down_text = ""
-                td_next = next_job.next_time_point - dt.now()
-                if td_next.days < 1 and td_next.seconds < 11:
-                    if td_next.seconds > 0.5:
-                        self.lbl_info.text = self.format_text(
-                            f"Next job {next_job.name} WILL start in {td_next.seconds}{'  ' * round(td_next.seconds)} >",
-                            is_bold=True,
-                            font_size=20,
-                        )
-                    else:
-                        self.launch_job(job=next_job)
-
-                else:
-                    count_down_text += f"{td_next.days} days "
-                    hours, remainder = divmod(td_next.seconds, 3600)
-                    minutes, seconds = divmod(remainder, 60)
-                    count_down_text += f"{hours} hours "
-                    count_down_text += f"{minutes} minutes "
-                    count_down_text += f"and {seconds} seconds"
-                    self.lbl_info.text = f"Next job {next_job.name} starts in {count_down_text}"
-            else:
-                self.lbl_info.text = "No job in schedule"
 
         return True
 
@@ -635,7 +649,7 @@ class SettingsPage(MyScreen):
         try:
             controller.settings["target_ip"] = self.target_ip.text
             controller.settings["target_port"] = int(self.target_port.text)
-            controller.settings["tray_count"] = self.tray_count.text
+            controller.settings["tray_count"] = int(self.tray_count.text)
             controller.settings["image_resolution"] = self.image_resolution.text
             controller.update_camera_resolution()
         except Exception as e:
