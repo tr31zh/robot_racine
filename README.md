@@ -34,7 +34,7 @@ This repository contains both the UI and the firmware needed to to run Robot Rac
 
 ## Installation
 
-Sorry, but this is going to not easy nor quick.
+Sorry, but this is going to neither easy nor quick.
 
 ### Prerequisits
 
@@ -183,6 +183,7 @@ If a job is in progress, the capture page can be used to view the pictures as th
 
 On the right there's the bos list and the **Add..** button at the bottom.  
 On the middle is the selected job editable data:
+
 - Name, description: Used to diferenciate the job.
 - Owner: Name of the job owner.
 - Mail to: Mail to this people when job events arise. **Not implemented yet**.
@@ -215,7 +216,7 @@ Edit UI settings
 
 ### send_images.py
 
-This script is launched by the UI if not active to automatically send the images to the server automatically every 10 minutes.
+This script is launched by the UI every 6 minutes if not already running to send images to either a connected USB key or a distant server if the script has been properly configured.
 
 ### camera_setting.py
 

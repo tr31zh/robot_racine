@@ -7,18 +7,26 @@ from datetime import datetime as dt
 from datetime import timedelta as td
 import datetime
 from enum import Enum
-import time
 import shutil
 from pathlib import Path
 import socket
 import subprocess
 import glob
+from timeit import default_timer as timer
+import paramiko
 
 import pandas as pd
 
 from kivy.network.urlrequest import UrlRequest
 
 from picamera import PiCamera
+
+try:
+    from server_credentials import connection_data
+except Exception as e:
+    server_conf = {}
+else:
+    server_conf = connection_data.get("phenopsis", {})
 
 logger = logging.getLogger("rr_drive")
 
@@ -242,18 +250,16 @@ class Controller:
         self.save_plant_data()
         self.save_jobs_data()
 
-    def check_send_tool(self, callback):
+    def start_send_tool(self, callback):
         # Check script is running
-        def check_script() -> bool:
-            p1 = subprocess.Popen(["pgrep", "-af", "python"], stdout=subprocess.PIPE)
-            p2 = subprocess.Popen(
-                ["grep", "send_images.py"], stdin=p1.stdout, stdout=subprocess.PIPE
-            )
-            p1.stdout.close()
-            output, err = p2.communicate()
-            return (err is None) and ("send_images.py" in str(output))
+        p1 = subprocess.Popen(["pgrep", "-af", "python"], stdout=subprocess.PIPE)
+        p2 = subprocess.Popen(
+            ["grep", "send_images.py"], stdin=p1.stdout, stdout=subprocess.PIPE
+        )
+        p1.stdout.close()
+        output, err = p2.communicate()
 
-        if not check_script():
+        if (err is not None) or ("send_images.py" not in str(output)):
             callback(
                 f"Sender script not active, launching it",
                 wipe_after=-1,
@@ -329,13 +335,12 @@ class Controller:
             logger.info("Loaded data")
 
     def update_camera_resolution(self):
-        try:            
+        try:
             self.camera.framerate = 15
             self.camera.resolution = self.settings["image_resolution"].split("x")
         except Exception as e:
             logger.error(f"Unable to set camera resolution because {repr(e)}")
-            self.camera.resolution = (1024, 768)            
-
+            self.camera.resolution = (1024, 768)
 
     def get_next_job(self):
         n = dt.now()
@@ -624,7 +629,6 @@ class Controller:
                 )
 
     def execute_job(self, job: JobData, callback):
-        self.check_send_tool(callback)
         callback(
             f"Starting Job {job.name}",
             wipe_after=-1,
@@ -667,3 +671,84 @@ class Controller:
                 "snap_in_progress.txt",
             )
         )
+
+
+def send_pictures(work_seconds: int):
+    start = timer()
+
+    src_folder = os.path.join(os.path.dirname(__file__), "..", "data", "images", "to_send", "")
+
+    if server_conf:
+        p = paramiko.SSHClient()
+        p.set_missing_host_key_policy(paramiko.AutoAddPolicy)
+        p.connect(
+            server_conf["address"],
+            port=server_conf["port"],
+            username=server_conf["user"],
+            password=server_conf["password"],
+        )
+        ftp = p.open_sftp()
+        ftp.chdir("RobotRacine")
+        for name in os.listdir(src_folder):
+            if (timer() - start) >= work_seconds:
+                logger.info(
+                    f"Stopping sending images to avoid job conflicts after {(timer() - start) / 60} minutes"
+                )
+                break
+            try:
+                exp_folder = os.path.basename(name).split("#")[1]
+                try:
+                    ftp.chdir(exp_folder)
+                except IOError:
+                    logger.info(f"Creating {exp_folder} folder")
+                    ftp.mkdir(exp_folder)
+                    ftp.chdir(exp_folder)
+                ftp.put(os.path.join(src_folder, name), name)
+            except Exception as e:
+                logger.error(f"Unable to move {name} because {repr(e)}")
+            else:
+                # Check file size and delete source
+                if os.path.getsize(os.path.join(src_folder, name)) == ftp.stat(name).st_size:
+                    logger.info(f"Moved {name}, deleted source")
+                else:
+                    logger.error(f"Wrong destination file size: {name}")
+
+                ftp.chdir("..")
+        else:
+            logger.info("Ended file sending")
+        ftp.close()
+        p.close()
+    else:
+        # Find the target folder
+        for fld in glob.glob(os.path.join("/", "media", "pi", "*")):
+            if os.path.isdir(os.path.join(fld, "robot_racine", "")):
+                base_target_folder = os.path.join(fld, "robot_racine", "")
+                break
+        else:
+            base_target_folder = ""
+            logger.warning("No target folder found, will not move images")
+        if base_target_folder:
+            for name in os.listdir(src_folder):
+                if (timer() - start) >= work_seconds:
+                    logger.info(
+                        f"Stopping sending images to avoid job conflicts after {(timer() - start) / 60} minutes"
+                    )
+                    break
+                try:
+                    # Get experiment name
+                    target_folder = os.path.join(
+                        base_target_folder, os.path.basename(name).split("#")[1]
+                    )
+                    if not os.path.exists(target_folder):
+                        os.makedirs(target_folder)
+
+                    shutil.move(
+                        os.path.join(src_folder, name),
+                        os.path.join(target_folder, name),
+                    )
+                except Exception as e:
+                    logger.error(f"Unable to move {name} because {repr(e)}")
+                else:
+                    logger.info(f"Moved {name}")
+            else:
+                logger.info("Ended file sending")
