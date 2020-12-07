@@ -853,13 +853,14 @@
     target_ip: target_ip
     target_port: target_port
     tray_count: tray_count
+    target_stop_port: target_stop_port
     image_resolution: image_resolution
     BoxLayout:
         orientation: "vertical"
         size_hint: 1, 1
         padding: [10, 0, 10, 0]
         spacing: 10
-        default_line_height: 0.6
+        # default_line_height: 0.8
         BoxLayout:
             orientation: "horizontal"                
             padding: 6
@@ -869,7 +870,7 @@
                 text_size: self.size        
                 halign: 'left'
                 valign: 'middle'
-                size_hint: 0.3, 1
+                size_hint: 0.41, 1
             TextInput:
                 id: target_ip
                 text: "@"
@@ -882,9 +883,22 @@
                 text_size: self.size        
                 halign: 'left'
                 valign: 'middle'
-                size_hint: 0.3, 1
+                size_hint: 0.41, 1
             TextInput:
                 id: target_port
+                text: "p"
+        BoxLayout:
+            orientation: "horizontal"                
+            padding: 6
+            size_hint: 1, self.parent.default_line_height
+            Label:
+                text: "Target Stop Reserved Port:"
+                text_size: self.size        
+                halign: 'left'
+                valign: 'middle'
+                size_hint: 0.41, 1
+            TextInput:
+                id: target_stop_port
                 text: "p"
         BoxLayout:
             orientation: "horizontal"                
@@ -895,7 +909,7 @@
                 text_size: self.size        
                 halign: 'left'
                 valign: 'middle'
-                size_hint: 0.3, 1
+                size_hint: 0.41, 1
             TextInput:
                 id: tray_count
                 text: "-1"
@@ -908,7 +922,7 @@
                 text_size: self.size        
                 halign: 'left'
                 valign: 'middle'
-                size_hint: 0.3, 1
+                size_hint: 0.41, 1
             Spinner:
                 id: image_resolution
                 text: '1024x768'
@@ -942,8 +956,3 @@
                 size_hint: 0.25, 1
                 on_press: 
                     root.save_settings()
-        Label:
-            halign: 'left'
-            valign: 'middle'
-            text: ""
-            size_hint: 1, 1

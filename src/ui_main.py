@@ -64,10 +64,14 @@ from kivy.uix.label import Label
 from kivy.uix.modalview import ModalView
 from kivy.clock import Clock
 
-from drive import Controller, JobData, JobState, send_pictures
+from drive import Controller, JobData, JobState
 
 
 controller: Controller = Controller()
+controller.send_command(
+    command="stop",
+    callback=None,
+)
 
 Config.set("graphics", "width", "800")
 Config.set("graphics", "height", "480")
@@ -644,13 +648,14 @@ class SettingsPage(MyScreen):
         self.target_port.text = str(controller.settings["target_port"])
         self.tray_count.text = str(controller.settings["tray_count"])
         self.image_resolution.text = controller.settings["image_resolution"]
+        self.target_stop_port.text = str(controller.settings["target_stop_port"])
 
     def save_settings(self):
         try:
             controller.settings["target_ip"] = self.target_ip.text
             controller.settings["target_port"] = int(self.target_port.text)
+            controller.settings["target_stop_port"] = int(self.target_stop_port.text)
             controller.settings["tray_count"] = int(self.tray_count.text)
-            controller.settings["image_resolution"] = self.image_resolution.text
             controller.update_camera_resolution()
         except Exception as e:
             logger.error(f"Failed to save settings because: {repr(e)}")
