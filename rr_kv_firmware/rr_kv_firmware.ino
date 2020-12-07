@@ -13,15 +13,19 @@
 char ssid[] = SECRET_SSID; // your network SSID (name)
 char pass[] = SECRET_PASS; // your network password (use for WPA, or use as key for WEP)
 
-// Simulation code
+
+int STOP = 3; // for stopping the step motor
+int IMGPOS = 12; // for sensing a plate at imaging position
+int ORIGIN = 8; // for sensing plate #1 at origin position
+
+bool SIM_MODE = true;
+
+// Simulation code  
 int bluLed = 7; // Home
-int redLed = 3; // Stop
 int greenLed = 5; // Start
 int yellowLed = 11; // Next
 int whiteLed = 1; // In transition
-int buttonNext = 12;
-int buttonHome = 8;
-int timeOutIter = 200;
+int timeOutIter = 2000; // 
 
 int status = WL_IDLE_STATUS;
 int nextAlreadyTriggered = 0;
@@ -44,14 +48,19 @@ void setup() {
 
   Serial.println("Access Point Web Server");
 
-  // Simulation code
-  pinMode(bluLed, OUTPUT);
-  pinMode(redLed, OUTPUT);
-  pinMode(greenLed, OUTPUT);
-  pinMode(yellowLed, OUTPUT);
-  pinMode(whiteLed, OUTPUT);
-  pinMode(buttonNext, INPUT_PULLUP);  
-  pinMode(buttonHome, INPUT_PULLUP);  
+  pinMode(STOP, OUTPUT);
+  if (SIM_MODE) { // Simulation code  
+    pinMode(bluLed, OUTPUT);
+    pinMode(greenLed, OUTPUT);
+    pinMode(yellowLed, OUTPUT);
+    pinMode(whiteLed, OUTPUT);
+    pinMode(IMGPOS, INPUT_PULLUP);  
+    pinMode(ORIGIN, INPUT_PULLUP);  
+  } else {
+    pinMode(IMGPOS, INPUT);  
+    pinMode(ORIGIN, INPUT);      
+  }
+  digitalWrite(STOP, HIGH);
 
   // check for the WiFi module:
   if (WiFi.status() == WL_NO_MODULE) {
@@ -214,45 +223,45 @@ void buildResponse(WiFiClient client, String msg) {
   client.println();
 }
 
+void setState(int stopState, int bl, int gl, int yl, int wl) {
+  digitalWrite(STOP, stopState);
+  if (SIM_MODE) { // Simulation code  
+    digitalWrite(bluLed, bl);
+    digitalWrite(greenLed, gl);
+    digitalWrite(yellowLed, yl);  
+    digitalWrite(whiteLed, wl);  
+  }
+}
+
 void doStart(WiFiClient client) {
-  digitalWrite(bluLed, LOW);
-  digitalWrite(redLed, LOW);
-  digitalWrite(greenLed, HIGH);
-  digitalWrite(yellowLed, LOW);
+  setState(LOW, LOW, HIGH, LOW, LOW);
   buildResponse(client, "start");
 }
 
 void doStop() {
-  digitalWrite(bluLed, LOW);
-  digitalWrite(redLed, HIGH);
-  digitalWrite(greenLed, LOW);
-  digitalWrite(yellowLed, LOW);
-  delay(500);
-  digitalWrite(redLed, LOW);
+  setState(HIGH, LOW, LOW, LOW, LOW);
 }
 
 void doGoHome(WiFiClient client) {
-  int homeSensor = digitalRead(buttonHome);
+  int homeSensor = digitalRead(ORIGIN);
   if (homeSensor == LOW) {
     buildResponse(client, "go_home");
   } else {
-    digitalWrite(bluLed, LOW);
-    digitalWrite(redLed, LOW);
-    digitalWrite(greenLed, HIGH);
-    digitalWrite(yellowLed, LOW);
-    digitalWrite(whiteLed, HIGH);
-    int homeSensor = digitalRead(buttonHome);
+    setState(LOW, LOW, HIGH, LOW, HIGH);
+    int homeSensor = digitalRead(ORIGIN);
     int aux = 0;
     int stop_requested = 0;
     int count_attempts = 0;
     while (homeSensor == HIGH) {
-      homeSensor = digitalRead(buttonHome);
+      homeSensor = digitalRead(ORIGIN);
       delay(10);
-      if (aux < 40) {
-        digitalWrite(bluLed, HIGH);
-      }
-      if (aux > 40) {
-        digitalWrite(bluLed, LOW);
+      if (SIM_MODE) { // Simulation code  
+        if (aux < 40) {
+          digitalWrite(bluLed, HIGH);
+        }
+        if (aux > 40) {
+          digitalWrite(bluLed, LOW);
+        }
       }
       if (aux > 80) {
         aux = 0;
@@ -260,7 +269,6 @@ void doGoHome(WiFiClient client) {
         aux++;
       }
       if (checkStopCommand() == 1) {
-        doStop();
         stop_requested = 1;
         break;
       }
@@ -271,45 +279,45 @@ void doGoHome(WiFiClient client) {
         break;
       }
     }
-    digitalWrite(whiteLed, LOW);
-    digitalWrite(greenLed, LOW);
-    if (stop_requested == 1) {
-      digitalWrite(bluLed, LOW);
-      buildResponse(client, "stopped");
-    } else {
-      digitalWrite(bluLed, HIGH);
-      buildResponse(client, "go_home");
-    }  
+    doStop();
+    if (SIM_MODE) { // Simulation code  
+      digitalWrite(whiteLed, LOW);
+      digitalWrite(greenLed, LOW);
+      if (stop_requested == 1) {
+        digitalWrite(bluLed, LOW);
+        buildResponse(client, "stopped");
+      } else {
+        digitalWrite(bluLed, HIGH);
+        buildResponse(client, "go_home");
+      }  
+    }
   }
 }
 
 void doGoNext(WiFiClient client) {
-  digitalWrite(bluLed, LOW);
-  digitalWrite(redLed, LOW);
-  digitalWrite(greenLed, HIGH);
-  digitalWrite(yellowLed, LOW);
-  digitalWrite(whiteLed, HIGH);
+  setState(LOW, LOW, HIGH, LOW, HIGH);
   delay(500);
-  int nextSensor = digitalRead(buttonNext);
+  int nextSensor = digitalRead(IMGPOS);
   int aux = 0;
   int stop_requested = 0;
   int count_attempts = 0;
   while (nextSensor == HIGH) {
-    nextSensor = digitalRead(buttonNext);
-    delay(10);        
-    if (aux < 40) {
-      digitalWrite(yellowLed, HIGH);
-    }
-    if (aux > 40) {
-      digitalWrite(yellowLed, LOW);
+    nextSensor = digitalRead(IMGPOS);
+    delay(10);
+    if (SIM_MODE) { // Simulation code  
+      if (aux < 40) {
+        digitalWrite(yellowLed, HIGH);
+      }
+      if (aux > 40) {
+        digitalWrite(yellowLed, LOW);
+      }
     }
     if (aux > 80) {
       aux = 0;
     } else {
       aux++;
     }
-    if (checkStopCommand() == 1) {
-      doStop();
+    if (checkStopCommand() == 1) {      
       stop_requested = 1;
       break;
     }
@@ -320,15 +328,18 @@ void doGoNext(WiFiClient client) {
       break;
     }
   }
-  digitalWrite(whiteLed, LOW);
-  digitalWrite(greenLed, LOW);
-  if (stop_requested == 1) {
-    digitalWrite(yellowLed, LOW);
-    buildResponse(client, "stopped");
-  } else {
-    digitalWrite(yellowLed, HIGH);
-    buildResponse(client, "go_next");
-  }  
+  doStop();
+  if (SIM_MODE) { // Simulation code  
+    digitalWrite(whiteLed, LOW);
+    digitalWrite(greenLed, LOW);
+    if (stop_requested == 1) {
+      digitalWrite(yellowLed, LOW);
+      buildResponse(client, "stopped");
+    } else {
+      digitalWrite(yellowLed, HIGH);
+      buildResponse(client, "go_next");
+    }
+  }
 }
 
 int checkStopCommand() {
