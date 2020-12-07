@@ -21,6 +21,7 @@ int yellowLed = 11; // Next
 int whiteLed = 1; // In transition
 int buttonNext = 12;
 int buttonHome = 8;
+int timeOutIter = 200;
 
 int status = WL_IDLE_STATUS;
 int nextAlreadyTriggered = 0;
@@ -265,7 +266,7 @@ void doGoHome(WiFiClient client) {
       }
       // If no board is present simulate button pressing with a time out
       count_attempts++;
-      if (count_attempts >= 200) {
+      if (count_attempts >= timeOutIter) {
         Serial.println("Button waiting Time out");
         break;
       }
@@ -314,7 +315,7 @@ void doGoNext(WiFiClient client) {
     }
     // If no board is present simulate button pressing with a time out
     count_attempts++;
-    if (count_attempts >= 200) {
+    if (count_attempts >= timeOutIter) {
       Serial.println("Button waiting Time out");
       break;
     }
