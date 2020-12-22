@@ -14,17 +14,17 @@ char ssid[] = SECRET_SSID; // your network SSID (name)
 char pass[] = SECRET_PASS; // your network password (use for WPA, or use as key for WEP)
 
 
-int STOP = 3; // for stopping the step motor
-int IMGPOS = 12; // for sensing a plate at imaging position
-int ORIGIN = 8; // for sensing plate #1 at origin position
+int STOP = 2; // for stopping the step motor
+int ORIGIN = 6; // for sensing plate #1 at origin position
+int IMGPOS = 9; // for sensing a plate at imaging position
 
 bool SIM_MODE = true;
 
 // Simulation code  
-int bluLed = 7; // Home
-int greenLed = 5; // Start
-int yellowLed = 11; // Next
 int whiteLed = 1; // In transition
+int greenLed = 3; // Start
+int bluLed = 5; // Home
+int yellowLed = 8; // Next
 int timeOutIter = 200; // 
 
 int status = WL_IDLE_STATUS;

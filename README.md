@@ -64,6 +64,8 @@ There are some things with which you should be confortable with before attemptin
 - Personal computer and USB cable to upload the firmware to the Arduino board.
 - A bread board with cables LEDs and buttons (recommended)
 
+For the ethernet version an arduino ethernet shield is needed
+
 ### Software dependencies
 
 - Packages
@@ -94,10 +96,10 @@ Clone this repositoryon your Raspberry Pi (and on your computer if you want to u
 
 ### Installing the Arduino firmware
 
-The fimrware is located in the rr_kv_firmware folder.  
-You need an Arduino compatible IDE, before pushing the firmware to the make sure that you have the following libraries installed: SPI, WiFiNINA, WiFiUdp.  
-In the firmware folder there is a wifi_credentials.h where you have to put your WiFi's SSID and password.
-Connect your arduino board to your computer with an USB cable, open the serial monitor and upload the firmware.  
+The WiFi firmware is located in the rr_kv_firmware folder, the ethernet firmware is located in the rr_kv_eth_firmware folder.  
+You need an Arduino compatible IDE, before pushing the firmware to the make sure that you have the following libraries installed: SPI, WiFiNINA, WiFiUdp for the WiFi version and Ethernet and Ethernet UDP for the ethernet version.  
+In the firmware folder there is a wifi_credentials.h where you have to put your WiFi's SSID and password for the WiFi version.
+Connect your arduino board to your computer with an USB cable, open the serial monitor and upload the firmware. For the Ethernet version you need to connect an ethernet cable to the ethernet shield.  
 If everything goes well the serial monitor will show something like this:  
 ![Serial monitor](./doc/serial_monitor.PNG)  
 
