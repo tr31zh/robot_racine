@@ -25,7 +25,7 @@ int bluLed = 7; // Home
 int greenLed = 5; // Start
 int yellowLed = 11; // Next
 int whiteLed = 1; // In transition
-int timeOutIter = 2000; // 
+int timeOutIter = 200; // 
 
 int status = WL_IDLE_STATUS;
 int nextAlreadyTriggered = 0;
