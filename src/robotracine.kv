@@ -723,6 +723,8 @@
         spacing: 10
         modal_result: 0
         file_name: file_name
+        file_chooser: file_chooser
+        start_folder: './'
         Label:
             text: "Select Data In file to load"
             size_hint: 1, 0.1
@@ -738,7 +740,7 @@
             id: file_chooser
             filters: ["*.csv"]
             multiselect: False
-            path: './'
+            path: root.start_folder
             on_selection: file_name.text = self.selection and self.selection[0] or ''
         TextInput:
             id: file_name

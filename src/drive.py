@@ -31,7 +31,8 @@ else:
 logger = logging.getLogger("rr_drive")
 
 
-TEST_MODE = True
+TEST_MODE = False
+USE_UDP = False
 
 plant_data_path = os.path.join(
     os.path.dirname(__file__),
@@ -59,8 +60,7 @@ else:
         os.path.dirname(__file__),
         "..",
         "data",
-        "data",
-        "test_jobs.json",
+        "jobs_data.json",
     )
 
 
@@ -95,8 +95,12 @@ class JobData:
         self.plants = kwargs.get("plants")
         self._repetition_mode = kwargs.get("repetition_mode")
         self._repetition_value = kwargs.get("repetition_value")
-        self._timestamp_start = dt.strptime(kwargs.get("timestamp_start"), "%Y/%m/%d %H:%M:%S")
-        self._timestamp_end = dt.strptime(kwargs.get("timestamp_end"), "%Y/%m/%d %H:%M:%S")
+        self._timestamp_start = dt.strptime(
+            kwargs.get("timestamp_start"), "%Y/%m/%d %H:%M:%S"
+        )
+        self._timestamp_end = dt.strptime(
+            kwargs.get("timestamp_end"), "%Y/%m/%d %H:%M:%S"
+        )
         self.time_points = []
         self.update_time_points()
 
@@ -130,7 +134,9 @@ class JobData:
             if isinstance(self.repetition_value, int):
                 hours = [self.repetition_value]
             elif isinstance(self.repetition_value, str):
-                hours = [int(h) for h in self.repetition_value.replace(" ", "").split(",")]
+                hours = [
+                    int(h) for h in self.repetition_value.replace(" ", "").split(",")
+                ]
             elif isinstance(self.repetition_value, list):
                 hours = self.repetition_value
             else:
@@ -140,6 +146,19 @@ class JobData:
                     [dt.combine(date=current, time=datetime.time(hour=h)) for h in hours]
                 )
                 current = current + td(days=1)
+
+    def update_time_boundaries(self, start_time, end_time, rep_mode, rep_value):
+        if isinstance(start_time, str):
+            self._timestamp_start = dt.strptime(start_time, "%Y/%m/%d %H:%M:%S")
+        else:
+            self._timestamp_start = start_time
+        if isinstance(end_time, str):
+            self._timestamp_end = dt.strptime(end_time, "%Y/%m/%d %H:%M:%S")
+        else:
+            self._timestamp_end = end_time
+        self._repetition_mode = rep_mode
+        self._repetition_value = rep_value
+        self.update_time_points()
 
     @property
     def next_time_point(self):
@@ -183,7 +202,10 @@ class JobData:
 
     @timestamp_start.setter
     def timestamp_start(self, value):
-        self._timestamp_start = value
+        if isinstance(value, str):
+            self._timestamp_start = dt.strptime(value, "%Y/%m/%d %H:%M:%S")
+        else:
+            self._timestamp_start = value
         self.update_time_points()
 
     @property
@@ -192,7 +214,10 @@ class JobData:
 
     @timestamp_end.setter
     def timestamp_end(self, value):
-        self._timestamp_end = value
+        if isinstance(value, str):
+            self._timestamp_end = dt.strptime(value, "%Y/%m/%d %H:%M:%S")
+        else:
+            self._timestamp_end = value
         self.update_time_points()
 
 
@@ -206,6 +231,8 @@ class Controller:
         self.callback = None
         self.waiting_commands = []
         self.awaiting_command = False
+        self.current_request = None
+        self.go_home_timeout_count = 0
 
         self.camera = PiCamera()
 
@@ -250,6 +277,22 @@ class Controller:
         self.save_plant_data()
         self.save_jobs_data()
 
+    def push_command(self, command, callback):
+        logger.info(f"Pushed command {command}")
+        self.waiting_commands.append({"cmd": command, "callback": callback})
+
+    def pop_command(self):
+        if self.waiting_commands:
+            next_command = self.waiting_commands.pop(0)
+            logger.info(f"popped command {next_command['cmd']}")
+            self.send_command(
+                command=next_command["cmd"],
+                callback=next_command["callback"],
+            )
+
+    def clear_commands(self):
+        self.waiting_commands = []
+
     def start_send_tool(self, callback):
         # Check script is running
         p1 = subprocess.Popen(["pgrep", "-af", "python"], stdout=subprocess.PIPE)
@@ -289,7 +332,8 @@ class Controller:
             True
             if not images
             else (
-                dt.now() - dt.fromtimestamp(os.path.getmtime(min(images, key=os.path.getctime)))
+                dt.now()
+                - dt.fromtimestamp(os.path.getmtime(min(images, key=os.path.getctime)))
             ).seconds
             < 7200
         )
@@ -362,7 +406,7 @@ class Controller:
             msg = f"{self.job_in_progress.name} {state_text} - "
         if self.robot_state["home"] == True:
             msg += "Home position"
-        elif self.robot_state["current_state"] >= 0:
+        elif self.robot_state["current_state"] >= 1:
             msg += f"Tray {self.robot_state['current_state']} camera ready"
         else:
             msg += f"Unknown position"
@@ -376,13 +420,22 @@ class Controller:
                 received_command.split("<br>")[-1].replace("\n", "").replace("\r", "")
             )
 
-        if received_command == "stopped":
-            self.callback(
-                message=f"Received response for {sent_cmd} cancel request",
-                wipe_after=5,
-                log_level=logging.INFO,
-            )
+        logger.info(f"Entered success, sent: {sent_cmd}, received: {received_command}")
+
+        if received_command == "stop":
+            if self.callback is not None:
+                self.callback(
+                    message=f"Received response for {sent_cmd} cancel request",
+                    wipe_after=5,
+                    log_level=logging.INFO,
+                )
+            else:
+                logger.info("Sent first stop")
             self.awaiting_command = False
+            return
+
+        if received_command == "go_home_timeout":
+            self.send_request(command="go_home_dirty")
             return
 
         if sent_cmd != received_command:
@@ -390,20 +443,22 @@ class Controller:
                 f"Inconsistent message received, expected {sent_cmd}, received {received_command}"
             )
 
-        if received_command == "go_home":
+        if received_command == "go_home_dirty":
             self.robot_state["home"] = True
         elif received_command == "go_next" and self.robot_state["home"] is True:
-            self.robot_state["current_state"] = 0
+            self.robot_state["current_state"] = 1
             self.robot_state["last_state"] = -1
             self.robot_state["home"] = False
         elif received_command == "go_next":
             self.robot_state["current_state"] = self.robot_state["last_state"] + 1
+            if self.robot_state["current_state"] > self.settings["tray_count"]:
+                self.robot_state["current_state"] = 1
             self.robot_state["last_state"] = -1
         elif self.robot_state["home"] is True:
             self.robot_state["home"] = False
 
         if self.job_in_progress is not None:
-            if received_command == "go_home":
+            if received_command == "go_home_dirty":
                 if self.job_in_progress.state == JobState.WAITING_HOME:
                     self.job_in_progress.state = JobState.IN_PROGRESS
                     self.callback(
@@ -450,39 +505,67 @@ class Controller:
                     log_level=logging.INFO,
                 )
                 self.job_in_progress.state = JobState.INACTIVE
-        else:
+        elif self.callback is not None:
             self.callback(
                 message=self.state_to_text(),
                 wipe_after=-1 if self.job_in_progress is None else 2,
                 log_level=logging.INFO,
             )
+        else:
+            logger.warning(f"No callback available for message: {self.state_to_text()}")
 
         self.awaiting_command = False
-        if self.waiting_commands:
-            next_command = self.waiting_commands.pop(0)
-            self.send_command(
-                command=next_command["cmd"],
-                callback=next_command["callback"],
-            )
+        self.pop_command()
 
     def on_failure(self, on_success, *args):
-        _, _, received_command = args
         self.callback(
-            message=f"Command: {received_command}, State: {self.robot_state}",
-            wipe_after=2,
-            log_level=logging.INFO,
+            message=f"FAILURE - Command: {str(args[1])}, State: {self.robot_state}",
+            wipe_after=20,
+            log_level=logging.WARNING,
         )
+        logger.warning(f"FAILURE - Command: {str(args[1])}, State: {self.robot_state}")
         self.awaiting_command = False
-        if self.waiting_commands:
-            next_command = self.waiting_commands.pop(0)
-            self.send_command(
-                command=next_command["cmd"],
-                feedback_label=next_command["feedback_label"],
+        self.pop_command()
+
+    def on_error(self, on_success, *args):
+        if (
+            isinstance(self.current_request.error, socket.timeout)
+            and self.go_home_timeout_count < 10
+        ):
+            self.go_home_timeout_count += 1
+            logger.info(
+                f"Dirty fix for kivy's URL request bug, attempt n°{self.go_home_timeout_count}"
             )
+            self.send_request("go_home_dirty")
+        else:
+            self.callback(
+                message=f"ERROR - {str(args[1])}, State: {self.robot_state}",
+                wipe_after=2,
+                log_level=logging.ERROR,
+            )
+            logger.error(f"ERROR - Command: {str(args[1])}, State: {self.robot_state}")
+            self.awaiting_command = False
+            self.pop_command()
+
+    def send_request(self, command, callback=None):
+        logger.info(f"Sending {command}")
+        if callback is not None:
+            self.callback = callback
+        self.current_request = UrlRequest(
+            url=f"http://{self.settings['target_ip']}:{self.settings['target_port']}/{command}",
+            req_headers={
+                "Content-type": "application/x-www-form-urlencoded",
+                "Accept": "text/plain",
+            },
+            on_success=partial(self.on_success, command),
+            on_failure=partial(self.on_failure, command),
+            on_error=partial(self.on_error, command),
+            # timeout=3 if command == "go_home" else None,
+        )
 
     def send_command(self, command, callback):
         if command == "stop":
-            self.waiting_commands = []
+            self.clear_commands()
             if self.job_in_progress is not None:
                 self.job_in_progress.state = JobState.ENDED
                 self.callback(
@@ -494,44 +577,53 @@ class Controller:
                 self.job_in_progress = None
             self.robot_state["last_state"] = -1
             self.robot_state["current_state"] = -1
-            sock = socket.socket(
-                socket.AF_INET,  # Internet
-                socket.SOCK_DGRAM,  # UDP
+            if USE_UDP is True:
+                sock = socket.socket(
+                    socket.AF_INET,  # Internet
+                    socket.SOCK_DGRAM,  # UDP
+                )
+                sock.sendto(
+                    data=bytes("STOP", "utf-8"),
+                    address=(
+                        self.settings["target_ip"],
+                        self.settings["target_stop_port"],
+                    ),
+                )
+            else:
+                if (
+                    self.current_request is not None
+                    and self.current_request.is_finished is False
+                ):
+                    self.current_request.cancel()
+                self.send_request(command=command, callback=callback)
+        elif command == "job_ended":
+            self.job_in_progress.state = JobState.ENDED
+            callback(
+                message=f"Job {self.job_in_progress.name} - Ended",
+                wipe_after=5,
+                log_level=logging.INFO,
             )
-            sock.sendto(
-                bytes("STOP", "utf-8"),
-                (self.settings["target_ip"], self.settings["target_stop_port"]),
-            )
+            self.job_in_progress.state = JobState.INACTIVE
+            self.job_in_progress = None
         elif self.awaiting_command is False:
             self.awaiting_command = True
             if command == "go_next":
                 self.robot_state["last_state"] = self.robot_state["current_state"]
                 self.robot_state["current_state"] = -1
-            elif command in ["stop", "start", "go_home"]:
-                self.robot_state["last_state"] = -1
-                self.robot_state["current_state"] = -1
-            elif command in ["go_home"]:
+            elif command in ["stop", "start", "go_home_dirty"]:
                 self.robot_state["last_state"] = -1
                 self.robot_state["current_state"] = -1
             else:
                 logger.error(f"Unknown command: {command}")
-            self.callback = callback
-            logger.info(f"Sent {command}")
-            self.r = UrlRequest(
-                url=f"http://{self.settings['target_ip']}:{self.settings['target_port']}/{command}",
-                req_headers={
-                    "Content-type": "application/x-www-form-urlencoded",
-                    "Accept": "text/plain",
-                },
-                on_success=partial(self.on_success, command),
-                on_failure=partial(self.on_failure, command),
-            )
+            self.send_request(command=command, callback=callback)
         elif self.awaiting_command is True:
-            self.waiting_commands.append({"cmd": command, "callback": callback})
+            self.push_command(command=command, callback=callback)
 
     def get_current_plant(self):
-        if self.robot_state["current_state"] >= 0:
-            tmp = self.plant_data[self.plant_data.position == self.robot_state["current_state"]]
+        if self.robot_state["current_state"] >= 1:
+            tmp = self.plant_data[
+                self.plant_data.position == self.robot_state["current_state"]
+            ]
             if tmp.shape[0] == 0:
                 return {}
             else:
@@ -637,16 +729,16 @@ class Controller:
         self.job_in_progress = job
         self.job_in_progress.state = JobState.WAITING_HOME
         self.send_command(
-            command="go_home",
+            command="go_home_dirty",
             callback=callback,
         )
         for _ in range(self.settings["tray_count"]):
-            self.send_command(
+            self.push_command(
                 command="go_next",
                 callback=callback,
             )
-        self.send_command(
-            command="go_home",
+        self.push_command(
+            command="job_ended",
             callback=callback,
         )
 
@@ -676,7 +768,9 @@ class Controller:
 def send_pictures(work_seconds: int):
     start = timer()
 
-    src_folder = os.path.join(os.path.dirname(__file__), "..", "data", "images", "to_send", "")
+    src_folder = os.path.join(
+        os.path.dirname(__file__), "..", "data", "images", "to_send", ""
+    )
 
     if server_conf:
         p = paramiko.SSHClient()
@@ -708,7 +802,10 @@ def send_pictures(work_seconds: int):
                 logger.error(f"Unable to move {name} because {repr(e)}")
             else:
                 # Check file size and delete source
-                if os.path.getsize(os.path.join(src_folder, name)) == ftp.stat(name).st_size:
+                if (
+                    os.path.getsize(os.path.join(src_folder, name))
+                    == ftp.stat(name).st_size
+                ):
                     logger.info(f"Moved {name}, deleted source")
                 else:
                     logger.error(f"Wrong destination file size: {name}")

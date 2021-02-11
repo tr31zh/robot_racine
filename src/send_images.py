@@ -28,7 +28,9 @@ lock_file = os.path.join(
 
 MOVE_IMAGES_MAX_DURATION = 5 * 60
 
-src_folder = os.path.join(os.path.dirname(__file__), "..", "data", "images", "to_send", "")
+src_folder = os.path.join(
+    os.path.dirname(__file__), "..", "data", "images", "to_send", ""
+)
 
 log_file_handler = logging.FileHandler(
     os.path.join(
@@ -64,6 +66,14 @@ def send_images():
         "data",
         "images",
         "to_send",
+        "",
+    )
+    sent_folder = os.path.join(
+        os.path.dirname(__file__),
+        "..",
+        "data",
+        "images",
+        "sent",
         "",
     )
 
@@ -103,7 +113,11 @@ def send_images():
                     os.path.getsize(os.path.join(src_folder, name))
                     == ftp.stat(os.path.join(exp_folder, name)).st_size
                 ):
-                    logger.info(f"Moved {name}, deleted source")
+                    logger.info(f"Moved {name}, moved source to sent folder")
+                    shutil.move(
+                        os.path.join(src_folder, name),
+                        os.path.join(sent_folder, name),
+                    )
                 else:
                     logger.error(f"Wrong destination file size: {name}")
 

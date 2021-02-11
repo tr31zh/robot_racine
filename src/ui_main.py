@@ -5,6 +5,7 @@ from datetime import timedelta as td
 import subprocess
 from multiprocessing import Process
 from timeit import default_timer as timer
+import glob
 
 
 lesser_log = []
@@ -35,7 +36,7 @@ log_file_handler = logging.FileHandler(
 log_file_handler.addFilter(LesserFilter())
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format="[%(asctime)s - %(name)s - %(levelname)s] - %(message)s",
     handlers=[log_file_handler],
 )
@@ -73,9 +74,10 @@ controller.send_command(
     callback=None,
 )
 
-Config.set("graphics", "width", "800")
-Config.set("graphics", "height", "480")
 Config.set("graphics", "borderless", "1")
+Config.set("graphics", "window_state", "maximized")
+
+
 
 MOVE_IMAGES_MIN_INTERVAL = 6 * 60
 
@@ -141,7 +143,7 @@ class MyPageManager(ScreenManager):
             self.update_countdown,
             0.1,
         )
-        self.last_time_sending_image = timer()
+        self.last_time_sending_image = timer() - MOVE_IMAGES_MIN_INTERVAL
 
     def on_back(self):
         self.current_screen.back()
@@ -260,7 +262,9 @@ class MyPageManager(ScreenManager):
                     count_down_text += f"{hours} hours "
                     count_down_text += f"{minutes} minutes "
                     count_down_text += f"and {seconds} seconds"
-                    self.lbl_info.text = f"Next job {next_job.name} starts in {count_down_text}"
+                    self.lbl_info.text = (
+                        f"Next job {next_job.name} starts in {count_down_text}"
+                    )
                     move_pictures = minutes * 60 >= MOVE_IMAGES_MIN_INTERVAL
             else:
                 self.lbl_info.text = "No job in schedule"
@@ -281,14 +285,18 @@ class MyPageManager(ScreenManager):
                     controller.robot_state["current_state"],
                     controller.robot_state["last_state"],
                 )
-                self.pg_global.value = idx / controller.settings["tray_count"]
-                js = f"in progress {idx}/{controller.settings['tray_count']}"
+                if idx > 0:
+                    self.pg_global.value = idx / controller.settings["tray_count"]
+                    js = f"in progress {idx}/{controller.settings['tray_count']}"
+                else:
+                    self.pg_global.value = 0 / controller.settings["tray_count"]
+                    js = "Waiting for first plant"
             elif jib.state == JobState.INACTIVE:
                 js = "ended"
                 self.pg_global.value = 0
             else:
                 js = "unknown"
-            self.lbl_info.text = self.lbl_info.text = self.format_text(
+            self.lbl_info.text = self.format_text(
                 f"Job {controller.job_in_progress.name} {js}",
                 is_bold=True,
                 font_size=20,
@@ -318,7 +326,9 @@ class StartUpPage(Screen):
         self.modal_dialog.modal_dialog_title.text = self.manager.format_text(
             text="Confirmation required", is_bold=False, font_size=0
         )
-        self.modal_dialog.modal_dialog_body.text = "Quit program?\nAll jobs will be stopped."
+        self.modal_dialog.modal_dialog_body.text = (
+            "Quit program?\nAll jobs will be stopped."
+        )
         self.modal_dialog.bind(on_dismiss=self.dialog_callback)
         self.modal_dialog.open()
 
@@ -339,7 +349,7 @@ class ManualRoot(MyScreen):
 
     def go_home(self):
         controller.send_command(
-            command="go_home",
+            command="go_home_dirty",
             callback=self.manager.update_status,
         )
 
@@ -400,7 +410,9 @@ class PlantSelector(ModalView):
                 if plant not in self.selected_plants_list
             ]
         ]
-        self.ids["selected_plants"].data = [{"text": j} for j in self.selected_plants_list]
+        self.ids["selected_plants"].data = [
+            {"text": j} for j in self.selected_plants_list
+        ]
 
     def add_to_selection(self):
         selected_nodes = self.ids["available_plants"].layout_manager.selected_nodes
@@ -435,7 +447,9 @@ class JobsManage(MyScreen):
 
     def init_jobs(self):
         set_index = not self.jobs_list.data
-        self.jobs_list.data = [{"text": j.name, "guid": j.guid} for j in controller.jobs_data]
+        self.jobs_list.data = [
+            {"text": j.name, "guid": j.guid} for j in controller.jobs_data
+        ]
         if set_index and self.jobs_list.data:
             self.jobs_list.layout_manager.selected_nodes = [0]
 
@@ -463,14 +477,20 @@ class JobsManage(MyScreen):
                     "name": "Job " + dt.now().strftime("%Y%m%d %H:%M:%S"),
                     "enabled": True,
                     "guid": str(uuid4()),
-                    "description": "",
-                    "owner": "",
-                    "mail_to": "",
-                    "repetition_mode": "every",
-                    "repetition_value": 6,
-                    "timestamp_start": dt.now(),
-                    "timestamp_end": dt.now() + td(days=14),
-                    "plants": "",
+                    "description": f"Job created {dt.now().strftime('%A %d of %B %Y at %H:%M:%S')}",
+                    "owner": "TPMP",
+                    "mail_to": "Work in progress",
+                    "repetition_mode": "at",
+                    "repetition_value": "8,14,20",
+                    "timestamp_start": dt.now().strftime("%Y/%m/%d %H:%M:%S"),
+                    "timestamp_end": (dt.now() + td(days=14)).strftime(
+                        "%Y/%m/%d %H:%M:%S"
+                    ),
+                    "plants": controller.plant_data[
+                        controller.plant_data.allow_capture == True
+                    ]
+                    .plant_name.unique()
+                    .tolist(),
                 }
             )
         )
@@ -481,24 +501,36 @@ class JobsManage(MyScreen):
     def update_data(self, guid):
         job = self.get_job(guid=guid)
         if job is None:
-            return
-        self.job_name.input_text = job.name
-        self.job_guid = guid
-        self.job_description.input_text = job.description
-        self.job_owner.input_text = job.owner
-        self.job_mail_list.input_text = "; ".join(job.mail_to)
-        self.time_mode.text = job.repetition_mode
-        self.time_value.text = str(job.repetition_value)
-        self.date_start.text = job.timestamp_start.strftime("%Y/%m/%d %H:%M:%S")
-        self.date_end.text = job.timestamp_end.strftime("%Y/%m/%d %H:%M:%S")
-        self.job_plant_list.text = ";".join(job.plants)
-
-        if job.enabled is True:
-            self.state_image_button.image_path = "../resources/active.png"
-            self.state_image_button.lbl_text = "active"
-        else:
+            self.job_name.input_text = ""
+            self.job_guid = ""
+            self.job_description.input_text = ""
+            self.job_owner.input_text = ""
+            self.job_mail_list.input_text = ""
+            self.time_mode.text = ""
+            self.time_value.text = ""
+            self.date_start.text = ""
+            self.date_end.text = ""
+            self.job_plant_list.text = ""
             self.state_image_button.image_path = "../resources/paused.png"
             self.state_image_button.lbl_text = "paused"
+        else:
+            self.job_name.input_text = job.name
+            self.job_guid = guid
+            self.job_description.input_text = job.description
+            self.job_owner.input_text = job.owner
+            self.job_mail_list.input_text = "; ".join(job.mail_to)
+            self.time_mode.text = job.repetition_mode
+            self.time_value.text = str(job.repetition_value)
+            self.date_start.text = job.timestamp_start.strftime("%Y/%m/%d %H:%M:%S")
+            self.date_end.text = job.timestamp_end.strftime("%Y/%m/%d %H:%M:%S")
+            self.job_plant_list.text = ";".join(job.plants)
+
+            if job.enabled is True:
+                self.state_image_button.image_path = "../resources/active.png"
+                self.state_image_button.lbl_text = "active"
+            else:
+                self.state_image_button.image_path = "../resources/paused.png"
+                self.state_image_button.lbl_text = "paused"
 
     def save_job(self, guid):
         index = self.get_job_index(guid=guid)
@@ -506,18 +538,21 @@ class JobsManage(MyScreen):
             return
         controller.jobs_data[index].name = self.job_name.text_holder.text
         controller.jobs_data[index].enabled = self.state_image_button.lbl_text == "active"
-        controller.jobs_data[index]["description"] = self.job_description.text_holder.text
+        controller.jobs_data[index].description = self.job_description.text_holder.text
         controller.jobs_data[index].owner = self.job_owner.text_holder.text
         controller.jobs_data[index].mail_to = self.job_mail_list.text_holder.text.replace(
             " ", ""
         ).split(";")
-        controller.jobs_data[index].repetition_mode = self.time_mode.text
         try:
-            controller.jobs_data[index].repetition_value = int(self.time_value.text)
+            rep_val = int(self.time_value.text)
         except:
-            controller.jobs_data[index].repetition_value = 0
-        controller.jobs_data[index].timestamp_start = self.date_start.text
-        controller.jobs_data[index].timestamp_end = self.date_end.text
+            rep_val = 6
+        controller.jobs_data[index].update_time_boundaries(
+            start_time=self.date_start.text,
+            end_time=self.date_end.text,
+            rep_mode=self.time_mode.text,
+            rep_value=rep_val,
+        )
 
     def toggle_job_state(self, guid):
         job = self.get_job(guid=guid)
@@ -542,12 +577,15 @@ class JobsManage(MyScreen):
             return
         controller.jobs_data.pop(index)
         self.init_jobs()
-        self.update_data(guid=controller.jobs_data[-1].guid)
+        if len(controller.jobs_data) > 0:
+            self.update_data(guid=controller.jobs_data[-1].guid)
+        else:
+            self.update_data(guid=None)
 
     def close_plant_selection(self, instance):
         if instance.modal_result == 1:
             current_plants = [d["text"] for d in instance.ids["selected_plants"].data]
-            instance.job["plants"] = current_plants
+            instance.job.plants = current_plants
             self.update_data(guid=instance.job.guid)
         return False
 
@@ -578,6 +616,7 @@ class JobsLog(MyScreen):
 
 class FileLoader(ModalView):
     file_name = ObjectProperty(None)
+    start_folder = StringProperty("./")
 
 
 class DataIn(MyScreen):
@@ -597,7 +636,7 @@ class DataIn(MyScreen):
     def close_file_selection(self, instance):
         if instance.modal_result == 1:
             try:
-                new_df = pd.read_csv(instance.ids["file_name"].text)
+                new_df = pd.read_csv(instance.ids["file_name"].text).dropna()
             except Exception as e:
                 logger.error(f"Failed to load data in because {repr(e)}")
             else:
@@ -609,6 +648,14 @@ class DataIn(MyScreen):
 
     def load_file(self):
         self.file_loader = FileLoader()
+        for fld in glob.glob(os.path.join("/", "media", "pi", "*")):
+            if os.path.isdir(os.path.join(fld, "rr_data_in", "")):
+                self.file_loader.start_folder = os.path.join(fld, "rr_data_in", "")
+                break
+        else:
+            self.file_loader.start_folder = os.path.join(
+                os.path.expanduser("~"), "Documents"
+            )
         self.file_loader.bind(on_dismiss=self.close_file_selection)
         self.file_loader.open()
 
