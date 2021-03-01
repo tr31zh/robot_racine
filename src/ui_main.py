@@ -65,7 +65,7 @@ from kivy.uix.label import Label
 from kivy.uix.modalview import ModalView
 from kivy.clock import Clock
 
-from drive import Controller, JobData, JobState
+from drive import Controller, JobData, JobState, USE_SEND_IMAGES_SCRIPT
 
 
 controller: Controller = Controller()
@@ -76,7 +76,6 @@ controller.send_command(
 
 Config.set("graphics", "borderless", "1")
 Config.set("graphics", "window_state", "maximized")
-
 
 
 MOVE_IMAGES_MIN_INTERVAL = 6 * 60
@@ -270,7 +269,8 @@ class MyPageManager(ScreenManager):
                 self.lbl_info.text = "No job in schedule"
                 move_pictures = True
             if (
-                move_pictures
+                USE_SEND_IMAGES_SCRIPT
+                and move_pictures
                 and (timer() - self.last_time_sending_image) > MOVE_IMAGES_MIN_INTERVAL
             ):
                 self.last_time_sending_image = timer()
@@ -313,6 +313,7 @@ class StartUpPage(Screen):
 
     def dialog_callback(self, instance):
         if instance.modal_result == 1:
+            logger.info("Leaving app")
             controller.send_command(
                 command="stop",
                 callback=self.manager.update_status,

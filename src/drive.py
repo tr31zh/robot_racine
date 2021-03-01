@@ -33,6 +33,7 @@ logger = logging.getLogger("rr_drive")
 
 TEST_MODE = False
 USE_UDP = False
+USE_SEND_IMAGES_SCRIPT = False
 
 plant_data_path = os.path.join(
     os.path.dirname(__file__),
@@ -294,10 +295,14 @@ class Controller:
         self.waiting_commands = []
 
     def start_send_tool(self, callback):
+        if USE_SEND_IMAGES_SCRIPT is True:
+            return
         # Check script is running
         p1 = subprocess.Popen(["pgrep", "-af", "python"], stdout=subprocess.PIPE)
         p2 = subprocess.Popen(
-            ["grep", "send_images.py"], stdin=p1.stdout, stdout=subprocess.PIPE
+            ["grep", "send_images.py"],
+            stdin=p1.stdout,
+            stdout=subprocess.PIPE,
         )
         p1.stdout.close()
         output, err = p2.communicate()
@@ -356,7 +361,6 @@ class Controller:
             if os.path.isfile(jobs_file_path):
                 with open(jobs_file_path, "r") as f:
                     self.jobs_data = [JobData(**j) for j in json.load(f)["jobs"]]
-                # self.jobs_data[0].timestamp_start = dt.now() - td(hours=1) + td(seconds=15)
             else:
                 self.jobs_data = []
 
@@ -392,7 +396,9 @@ class Controller:
             [
                 j
                 for j in self.jobs_data
-                if j.enabled is True and j.timestamp_start <= n <= j.timestamp_end
+                if j.enabled is True
+                and j.timestamp_start <= n <= j.timestamp_end
+                and j.next_time_point is not None
             ],
             key=lambda x: x.next_time_point,
         )
@@ -658,6 +664,65 @@ class Controller:
         else:
             return f"[exp:{plant['experiment']}][name:{plant['plant_name']}][pos:{plant['position']}]"
 
+    def send_image(self, source_path):
+        src_file_name = os.path.basename(source_path)
+        exp_folder = src_file_name.split("#")[1]
+        if server_conf:
+            p = paramiko.SSHClient()
+            p.set_missing_host_key_policy(paramiko.AutoAddPolicy)
+            p.connect(
+                server_conf["address"],
+                port=server_conf["port"],
+                username=server_conf["user"],
+                password=server_conf["password"],
+            )
+            ftp = p.open_sftp()
+            ftp.chdir("RobotRacine")
+            try:
+                try:
+                    ftp.stat(exp_folder)
+                except FileNotFoundError:
+                    logger.info(f"Creating {exp_folder} folder")
+                    ftp.mkdir(exp_folder)
+                ftp.put(source_path, os.path.join(exp_folder, src_file_name))
+            except Exception as e:
+                logger.error(f"Unable to move {src_file_name} because {repr(e)}")
+            else:
+                # Check file size and delete source
+                if (
+                    os.path.getsize(source_path)
+                    == ftp.stat(os.path.join(exp_folder, src_file_name)).st_size
+                ):
+                    logger.info(f"Moved {src_file_name}, moved source to sent folder")
+                    shutil.move(source_path, source_path.replace("to_send", "sent"))
+                else:
+                    logger.error(f"Wrong destination file size: {src_file_name}")
+            finally:
+                ftp.close()
+                p.close()
+        else:
+            # Find the target folder
+            for fld in glob.glob(os.path.join("/", "media", "pi", "*")):
+                if os.path.isdir(os.path.join(fld, "robot_racine", "")):
+                    base_target_folder = os.path.join(fld, "robot_racine", "")
+                    break
+            else:
+                base_target_folder = ""
+                logger.warning("No target folder found, will not move images")
+            if base_target_folder:
+                try:
+                    target_folder = os.path.join(base_target_folder, exp_folder)
+                    if not os.path.exists(target_folder):
+                        os.makedirs(target_folder)
+                    shutil.move(
+                        source_path,
+                        os.path.join(target_folder, src_file_name),
+                    )
+                except Exception as e:
+                    logger.error(f"Unable to move {src_file_name} because {repr(e)}")
+                else:
+                    logger.info(f"Moved {src_file_name}")
+
     def snap(self, callback, save_image: bool = True):
         sr = self.snap_request()
         if (self.job_in_progress is not None) and sr == "disabled":
@@ -672,19 +737,22 @@ class Controller:
                 self.camera.capture(self.path_to_last_image)
                 self.camera.stop_preview()
                 if save_image is True:
-                    shutil.copy(
-                        self.path_to_last_image,
-                        os.path.join(
-                            os.path.dirname(__file__),
-                            "..",
-                            "data",
-                            "images",
-                            "to_send"
-                            if (self.job_in_progress is not None) and (sr == "allowed")
-                            else "to_keep",
-                            f"{self.get_picture_name()}.png",
-                        ),
+                    target_folder = (
+                        "to_send"
+                        if (self.job_in_progress is not None) and (sr == "allowed")
+                        else "to_keep"
                     )
+                    target_file = os.path.join(
+                        os.path.dirname(__file__),
+                        "..",
+                        "data",
+                        "images",
+                        target_folder,
+                        f"{self.get_picture_name()}.png",
+                    )
+                    shutil.copy(self.path_to_last_image, target_file)
+                    if target_folder == "to_send" and USE_SEND_IMAGES_SCRIPT is False:
+                        self.send_image(source_path=target_file)
             except Exception as e:
                 callback(
                     f"Failed to capture image because {repr(e)}",

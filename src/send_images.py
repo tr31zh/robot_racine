@@ -162,4 +162,9 @@ def send_images():
 
 
 if __name__ == "__main__":
-    send_images()
+    try:
+        send_images()
+    except:
+        exit(1)
+    else:
+        exit(0)
