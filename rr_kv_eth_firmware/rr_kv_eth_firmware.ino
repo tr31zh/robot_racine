@@ -8,26 +8,32 @@
 #include <Ethernet.h>
 #include <EthernetUdp.h>
 
-int STOP = 2; // for stopping the step motor
-int ORIGIN = 6; // for sensing plate #1 at origin position
-int IMGPOS = 9; // for sensing a plate at imaging position
+//int STOP = 2; // for stopping the step motor
+//int ORIGIN = 6; // for sensing plate #1 at origin position
+//int IMGPOS = 9; // for sensing a plate at imaging position
 
-bool SIM_MODE = true;
+int STOP = 9; // for stopping the step motor
+int IMGPOS = 5; // for sensing a plate at imaging position
+int ORIGIN = 6; // for sensing plate #1 at origin position
+
+bool SIM_MODE = false;
 
 // Simulation code  
 int whiteLed = 1; // In transition
 int greenLed = 3; // Start
 int bluLed = 5; // Home
 int yellowLed = 8; // Next
-int timeOutIter = 200; // 
+int timeOutIter = 20000; // 
+int dirtyHomeTimer = 10000; // In milliseconds 
+int loopDelay = 10;
 
 int nextAlreadyTriggered = 0;
 
 byte mac[] = { 0xA8, 0x61, 0x0A, 0xAE, 0x6D, 0xB3 }; //physical mac address
-byte ip[] = {192, 168, 0, 21};
+byte ip[] = {147, 99, 107, 43};
 
 // UDP
-unsigned int localPort = 2390;
+unsigned int localPort = 80;
 char packetBuffer[256]; //buffer to hold incoming packet
 char  ReplyBuffer[] = "stopped"; // a string to send back
 
@@ -42,18 +48,6 @@ void setup() {
     ; // wait for serial port to connect. Needed for native USB port only
   }
 
-  // Start Ethernet server
-  Serial.println("Access Point Web Server");
-  Ethernet.begin(mac, ip);
-  Serial.print("IP Address: ");
-  Serial.println(Ethernet.localIP());
-  Serial.print("To see this page in action, open a browser to http://");
-  Serial.println(Ethernet.localIP());
-  server.begin();
-
-  // Start UDP connexion
-  Udp.begin(localPort);
-
   pinMode(STOP, OUTPUT);
   if (SIM_MODE) { // Simulation code  
     pinMode(bluLed, OUTPUT);
@@ -67,6 +61,18 @@ void setup() {
     pinMode(ORIGIN, INPUT);      
   }
   digitalWrite(STOP, HIGH);
+
+  // Start Ethernet server
+  Serial.println(F("Access Point Web Server"));
+  Ethernet.begin(mac, ip);
+  Serial.print(F("IP Address: "));
+  Serial.println(Ethernet.localIP());
+  Serial.print(F("To see this page in action, open a browser to http://"));
+  Serial.println(Ethernet.localIP());
+  server.begin();
+
+  // Start UDP connexion
+  Udp.begin(localPort);  
 }
 
 void loop() {
@@ -105,6 +111,10 @@ void loop() {
           received_command = "go_home";
         }
 
+        if (currentLine.endsWith("GET /go_home_dirty")) {
+          received_command = "go_home_dirty";
+        }
+
         if (currentLine.endsWith("GET /go_next")) {
           received_command = "go_next";
         }
@@ -120,68 +130,77 @@ void loop() {
     }
 
     if (received_command == "start") {
-      Serial.println("Reponding to start command");
+      Serial.println(F("Starting start command"));
       doStart(client);
     }
 
     if (received_command == "stop") {
-      Serial.println("Reponding to stop command");
+      Serial.println(F("Starting stop command"));
       doStop();      
       buildResponse(client, "stop");
     }
 
     if (received_command == "") {
-      Serial.println("Reponding to no command, displaying default page");
+      Serial.println(F("Starting no command, displaying default page"));
       buildResponse(client, "");
     }
 
     if (received_command == "go_home") {
-      Serial.println("Reponding to go home command");
+      Serial.println(F("Starting go home command"));
       doGoHome(client);      
     }
 
+    if (received_command == "go_home_dirty") {
+      Serial.println(F("Starting go home dirty command"));
+      doGoHomeDirty(client);      
+    }
+
     if (received_command == "go_next") {
-      Serial.println("Reponding to go next command");
+      Serial.println(F("Starting go next command"));
       doGoNext(client);      
     }
 
     // close the connection:
     client.stop();
-    Serial.println("client disconnected");
-    Serial.println("___________________");
+    Serial.println(F("client disconnected"));
+    Serial.println(F("___________________"));
   }
 }
 
 void buildResponse(EthernetClient client, String msg) {
-  client.println("HTTP/1.1 200 OK");
-  client.println("Content-type:text/html");
+  Serial.print(F("Building response for "));
+  Serial.println(msg);
+  client.println(F("HTTP/1.1 200 OK"));
+  client.println(F("Content-type:text/html"));
   client.println();
   // the content of the HTTP response follows the header:
-  client.print("  <!DOCTYPE html>");
-  client.print("<html lang=\"en\">");
-  client.print("<head>");
-  client.print("  <title>Bootstrap Example</title>");
-  client.print("  <meta charset=\"utf-8\">");
-  client.print("  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">");
-  client.print("  <link rel=\"stylesheet\" href=\"https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css\">");
-  client.print("  <script src=\"https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js\"></script>");
-  client.print("  <script src=\"https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/js/bootstrap.min.js\"></script>");
-  client.print("</head>");
-  client.print("<body>");
-  client.print("");
-  client.print("<div class=\"container\">");
-  client.print("  <h2>Manual command overrides</h2>");
-  client.print("  <a href=\"/start\" class=\"btn btn-success\" role=\"button\">Start (turn green LED on)</a><br><br>");
-  client.print("  <a href=\"/stop\" class=\"btn btn-danger\" role=\"button\">Stop (turn red LED on)</a><br><br>");
-  client.print("  <a href=\"/go_next\" class=\"btn btn-warning\" role=\"button\">Go next (turn yellow LED on)</a><br><br>");
-  client.print("  <a href=\"/go_home\" class=\"btn btn-primary\" role=\"button\">Go home (turn blue LED on)</a><br><br>");
-  client.print("</div>");
-  client.print("");
-  client.print("</body>");
-  client.println("</html><br>");
+  client.print(F("  <!DOCTYPE html>"));
+  client.print(F("<html lang=\"en\">"));
+  client.print(F("<head>"));
+  client.print(F("  <title>Bootstrap Example</title>"));
+  client.print(F("  <meta charset=\"utf-8\">"));
+  client.print(F("  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"));
+  client.print(F("  <link rel=\"stylesheet\" href=\"https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css\">"));
+  client.print(F("  <script src=\"https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js\"></script>"));
+  client.print(F("  <script src=\"https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/js/bootstrap.min.js\"></script>"));
+  client.print(F("</head>"));
+  client.print(F("<body>"));
+  client.print(F(""));
+  client.print(F("<div class=\"container\">"));
+  client.print(F("  <h2>Manual command overrides</h2>"));
+  client.print(F("  <a href=\"/start\" class=\"btn btn-success\" role=\"button\">Start (turn green LED on)</a><br><br>"));
+  client.print(F("  <a href=\"/stop\" class=\"btn btn-danger\" role=\"button\">Stop (turn red LED on)</a><br><br>"));
+  client.print(F("  <a href=\"/go_next\" class=\"btn btn-warning\" role=\"button\">Go next (turn yellow LED on)</a><br><br>"));
+  client.print(F("  <a href=\"/go_home\" class=\"btn btn-primary\" role=\"button\">Go home (turn blue LED on)</a><br><br>"));
+  client.print(F("  <a href=\"/go_home_dirty\" class=\"btn btn-info\" role=\"button\">Go home diry(turn blue-ish LED on)</a><br><br>"));
+  client.print(F("</div>"));
+  client.print(F(""));
+  client.print(F("</body>"));
+  client.println(F("</html><br>"));
   client.print(msg);
   client.println();
   client.println();
+  Serial.println(F("Response sent"));
 }
 
 void setState(int stopState, int bl, int gl, int yl, int wl) {
@@ -205,7 +224,7 @@ void doStop() {
 
 void doGoHome(EthernetClient client) {
   int homeSensor = digitalRead(ORIGIN);
-  if (homeSensor == LOW) {
+  if (homeSensor == HIGH) {
     buildResponse(client, "go_home");
   } else {
     setState(LOW, LOW, HIGH, LOW, HIGH);
@@ -213,9 +232,9 @@ void doGoHome(EthernetClient client) {
     int aux = 0;
     int stop_requested = 0;
     int count_attempts = 0;
-    while (homeSensor == HIGH) {
+    while (homeSensor == LOW) {
       homeSensor = digitalRead(ORIGIN);
-      delay(10);
+      delay(loopDelay);
       if (SIM_MODE) { // Simulation code  
         if (aux < 40) {
           digitalWrite(bluLed, HIGH);
@@ -223,19 +242,19 @@ void doGoHome(EthernetClient client) {
         if (aux > 40) {
           digitalWrite(bluLed, LOW);
         }
-      }
-      if (aux > 80) {
-        aux = 0;
-      } else {
-        aux++;
-      }
+        if (aux > 80) {
+          aux = 0;
+        } else {
+          aux++;
+        }
+      }      
       if (checkStopCommand() == 1) {
         stop_requested = 1;
         break;
       }
       // If no board is present simulate button pressing with a time out
       count_attempts++;
-      if (count_attempts >= timeOutIter) {
+      if ((count_attempts >= timeOutIter) and SIM_MODE){
         Serial.println("Button waiting Time out");
         break;
       }
@@ -251,6 +270,82 @@ void doGoHome(EthernetClient client) {
         digitalWrite(bluLed, HIGH);
         buildResponse(client, "go_home");
       }  
+    } else {
+      if (stop_requested == 1) {
+        buildResponse(client, "stopped");
+      } else {
+        buildResponse(client, "go_home");
+      }
+    }
+  }
+}
+
+void doGoHomeDirty(EthernetClient client) {
+  int homeSensor = digitalRead(ORIGIN);
+  if (homeSensor == HIGH) {
+    buildResponse(client, "go_home");
+  } else {
+    setState(LOW, LOW, HIGH, LOW, HIGH);
+    int homeSensor = digitalRead(ORIGIN);
+    int aux = 0;
+    int stop_requested = 0;
+    int count_attempts = 0;
+    int dirtyTimer = 0;
+    int dirtyTimeout = 0;
+    while (homeSensor == LOW) {
+      homeSensor = digitalRead(ORIGIN);
+      delay(loopDelay);
+      if (SIM_MODE) { // Simulation code  
+        if (aux < 40) {
+          digitalWrite(bluLed, HIGH);
+        }
+        if (aux > 40) {
+          digitalWrite(bluLed, LOW);
+        }
+        if (aux > 80) {
+          aux = 0;
+        } else {
+          aux++;
+        }
+      }      
+      if (checkStopCommand() == 1) {
+        stop_requested = 1;
+        break;
+      }
+      // If no board is present simulate button pressing with a time out
+      count_attempts++;      
+      if ((count_attempts >= timeOutIter) and SIM_MODE){
+        Serial.println("Button waiting Time out");
+        break;
+      }
+      dirtyTimer = dirtyTimer + loopDelay;
+      if ((dirtyHomeTimer > 0) and (dirtyTimer >= dirtyHomeTimer)) {
+        dirtyTimeout = 1;
+        Serial.println("Dirty timeout");
+        break;
+      }
+    }
+    doStop();
+    if (SIM_MODE) { // Simulation code  
+      digitalWrite(whiteLed, LOW);
+      digitalWrite(greenLed, LOW);
+      if (stop_requested == 1) {
+        digitalWrite(bluLed, LOW);
+        buildResponse(client, "stopped");
+      } else {
+        digitalWrite(bluLed, HIGH);
+        buildResponse(client, "go_home_dirty");
+      }  
+    } else {
+      if (dirtyTimeout == 1) {
+        buildResponse(client, "go_home_timeout");
+      } else {      
+        if (stop_requested == 1) {
+          buildResponse(client, "stopped");
+        } else {
+          buildResponse(client, "go_home_dirty");
+        }
+      }
     }
   }
 }
@@ -262,9 +357,9 @@ void doGoNext(EthernetClient client) {
   int aux = 0;
   int stop_requested = 0;
   int count_attempts = 0;
-  while (nextSensor == HIGH) {
+  while (nextSensor == LOW) {
     nextSensor = digitalRead(IMGPOS);
-    delay(10);
+    delay(loopDelay);
     if (SIM_MODE) { // Simulation code  
       if (aux < 40) {
         digitalWrite(yellowLed, HIGH);
@@ -272,19 +367,19 @@ void doGoNext(EthernetClient client) {
       if (aux > 40) {
         digitalWrite(yellowLed, LOW);
       }
-    }
-    if (aux > 80) {
+      if (aux > 80) {
       aux = 0;
     } else {
       aux++;
     }
+    }    
     if (checkStopCommand() == 1) {      
       stop_requested = 1;
       break;
     }
     // If no board is present simulate button pressing with a time out
     count_attempts++;
-    if (count_attempts >= timeOutIter) {
+    if ((count_attempts >= timeOutIter) and SIM_MODE) {
       Serial.println("Button waiting Time out");
       break;
     }
@@ -300,6 +395,12 @@ void doGoNext(EthernetClient client) {
       digitalWrite(yellowLed, HIGH);
       buildResponse(client, "go_next");
     }
+  } else {
+    if (stop_requested == 1) {
+      buildResponse(client, "stopped");
+    } else {
+      buildResponse(client, "go_next");
+    }    
   }
 }
 
