@@ -4,6 +4,7 @@ import json
 from kivy.app import App
 from kivy.lang import Builder
 from kivy.uix.boxlayout import BoxLayout
+from kivy.config import Config
 import time
 
 
@@ -22,6 +23,10 @@ with open(
     #     width, height = "640", "480"
     # else:
     width, height = "640", "480"
+
+Config.set("graphics", "width", "800")
+Config.set("graphics", "height", "480")
+Config.set("graphics", "borderless", "1")
 
 
 Builder.load_string(
